@@ -98,95 +98,195 @@ class Database:
 
 
   def load_genetics_data(self, vcf_path: str, gwas_path: str, gene_name: str):
-    """
-    Loads VCF and GWAS data specifically for the coordinates of a target gene.
-    """
-    with self.get_session() as session:
-        # 1. Get Gene Coordinates
-        gene = Gene.from_name(session, gene_name)
-        if not gene:
-            print(f"Gene {gene_name} not found in DB. Load GTF first.")
-            return
-
-        chrom = gene.chromosome_id
-        start = gene.start
-        stop = gene.stop
+        """
+        Loads VCF and GWAS data specifically for the coordinates of a target gene.
+        Optimized for bulk loading using batch inserts.
+        """
+        from sqlalchemy import select, and_
         
-        print(f"Loading genetics for {gene_name} ({chrom}:{start}-{stop})...")
+        with self.get_session() as session:
+            # 1. Get Gene Coordinates
+            gene = Gene.from_name(session, gene_name)
+            if not gene:
+                print(f"Gene {gene_name} not found in DB. Load GTF first.")
+                return
 
-        # 2. Parse VCF (Genotyping) using pysam (requires indexed VCF)
-        # Assumes VCF is bgzipped and tabix indexed (.tbi)
-        vcf = pysam.VariantFile(vcf_path)
-        
-        # Buffer to bulk insert
-        variants_map = {} # Key: (chr, pos, ref, alt) -> Variant Object
-        
-        try:
-            for record in vcf.fetch(chrom, start, stop):
-                # Basic filtering for SNPs/Indels
-                ref = record.ref
-                for alt in record.alts:
-                    key = (chrom, record.pos, ref, alt)
-                    
-                    if key not in variants_map:
-                        var = GenomicVariant(
-                            chromosome=chrom, 
-                            position=record.pos,
-                            reference_allele=ref,
-                            alternative_allele=alt,
-                            rsid=record.id
-                        )
-                        session.add(var)
-                        session.flush() # Get ID
-                        variants_map[key] = var
-                    
-                    # Store Genotypes for your cohort
-                    for sample in record.samples:
-                        gt = record.samples[sample]['GT'] # Returns (0, 1) etc
-                        if gt != (0, 0): # Skip homozygous reference to save space
-                            session.add(SampleGenotype(
-                                variant_id=variants_map[key].id,
-                                sample_id=sample,
-                                genotype=f"{gt[0]}/{gt[1]}"
-                            ))
-        except ValueError as e:
-            print(f"Error fetching VCF region: {e}. Ensure VCF is tabix indexed.")
-
-        # 3. Load GWAS Summary Stats
-        # Assuming a TAB-separated file with columns: CHR, POS, REF, ALT, P, BETA
-        # Using pandas for ease, filtering by chunk
-        chunk_size = 100000
-        for chunk in pd.read_csv(gwas_path, sep='\t', chunksize=chunk_size):
-            # Filter for gene region
-            region_mask = (chunk['CHR'].astype(str) == chrom) & \
-                          (chunk['POS'] >= start) & \
-                          (chunk['POS'] <= stop)
+            chrom = gene.chromosome_id
+            start = gene.start
+            stop = gene.stop
             
-            subset = chunk[region_mask]
+            print(f"Loading genetics for {gene_name} ({chrom}:{start}-{stop})...")
+
+            # Data structures for buffering unique variants
+            # Key: (chromosome, position, reference_allele, alternative_allele)
+            unique_variants = {} 
             
-            for _, row in subset.iterrows():
-                # Check if variant exists from VCF load, or create new
-                key = (str(row['CHR']), row['POS'], row['REF'], row['ALT'])
-                
-                if key not in variants_map:
-                    var = GenomicVariant(
-                        chromosome=str(row['CHR']), 
-                        position=row['POS'],
-                        reference_allele=row['REF'],
-                        alternative_allele=row['ALT']
-                    )
-                    session.add(var)
-                    session.flush()
-                    variants_map[key] = var
-                
-                session.add(GWASStatistic(
-                    variant_id=variants_map[key].id,
-                    p_value=row['P'],
-                    beta=row['BETA'],
-                    trait="T2D"
-                ))
-        
-        session.commit()
+            # Buffers for dependent data
+            genotypes_buffer = [] 
+            gwas_buffer = []
+
+            # ---------------------------------------------------------
+            # 2. Parse VCF (Genotyping)
+            # ---------------------------------------------------------
+            if os.path.exists(vcf_path):
+                try:
+                    vcf = pysam.VariantFile(vcf_path)
+                    # pysam fetch uses 0-based, half-open coordinates. 
+                    # Gene start is 1-based, so subtract 1.
+                    for record in vcf.fetch(chrom, start - 1, stop):
+                        # record.pos is 1-based (matches Biosurfer DB)
+                        pos = record.pos
+                        ref = record.ref
+                        
+                        for alt in record.alts:
+                            key = (chrom, pos, ref, alt)
+                            
+                            if key not in unique_variants:
+                                unique_variants[key] = {
+                                    'chromosome': chrom,
+                                    'position': pos,
+                                    'reference_allele': ref,
+                                    'alternative_allele': alt,
+                                    'rsid': record.id if record.id else None
+                                }
+                            
+                            # Collect Genotypes (filtering for non-reference to save space)
+                            for sample_name, sample_dat in record.samples.items():
+                                gt = sample_dat['GT']
+                                # Skip homozygous ref (0, 0) and missing data
+                                if gt != (0, 0) and None not in gt:
+                                    genotypes_buffer.append({
+                                        'key': key, # Temporary link
+                                        'sample_id': sample_name,
+                                        'genotype': f"{gt[0]}/{gt[1]}"
+                                    })
+                except ValueError as e:
+                    print(f"Error fetching VCF region: {e}. Ensure VCF is bgzipped and tabix indexed.")
+                    return
+            else:
+                print(f"Warning: VCF file not found at {vcf_path}")
+
+            # ---------------------------------------------------------
+            # 3. Load GWAS Summary Stats
+            # ---------------------------------------------------------
+            if os.path.exists(gwas_path):
+                chunk_size = 100000
+                try:
+                    for chunk in pd.read_csv(gwas_path, sep='\t', chunksize=chunk_size):
+                        # Ensure columns are compatible types
+                        chunk['CHR'] = chunk['CHR'].astype(str)
+                        
+                        # Filter for gene region in this chunk
+                        region_mask = (chunk['CHR'] == chrom) & \
+                                      (chunk['POS'] >= start) & \
+                                      (chunk['POS'] <= stop)
+                        
+                        subset = chunk[region_mask]
+                        
+                        for _, row in subset.iterrows():
+                            r_chrom = str(row['CHR'])
+                            r_pos = int(row['POS'])
+                            r_ref = str(row['REF'])
+                            r_alt = str(row['ALT'])
+                            
+                            key = (r_chrom, r_pos, r_ref, r_alt)
+                            
+                            if key not in unique_variants:
+                                unique_variants[key] = {
+                                    'chromosome': r_chrom,
+                                    'position': r_pos,
+                                    'reference_allele': r_ref,
+                                    'alternative_allele': r_alt,
+                                }
+                            
+                            gwas_buffer.append({
+                                'key': key,
+                                'p_value': float(row['P']),
+                                'beta': float(row['BETA']),
+                                'trait': "T2D" 
+                            })
+                except Exception as e:
+                    print(f"Error reading GWAS file: {e}")
+            else:
+                 print(f"Warning: GWAS file not found at {gwas_path}")
+
+            if not unique_variants:
+                print("No variants found in the specified gene region.")
+                return
+
+            # ---------------------------------------------------------
+            # 4. Bulk Insert Variants
+            # ---------------------------------------------------------
+            print(f"Upserting {len(unique_variants)} unique variants...")
+            
+            # bulk_upsert ensures we don't duplicate variants if they already exist
+            variants_list = list(unique_variants.values())
+            bulk_upsert(session, GenomicVariant.__table__, variants_list, 
+                        primary_keys=('chromosome', 'position', 'reference_allele', 'alternative_allele'))
+            
+            # ---------------------------------------------------------
+            # 5. Retrieve Variant IDs
+            # ---------------------------------------------------------
+            # We need the IDs generated by the DB to link Genotypes and GWAS stats.
+            print("Mapping variant IDs...")
+            stmt = select(
+                GenomicVariant.id, 
+                GenomicVariant.chromosome, 
+                GenomicVariant.position, 
+                GenomicVariant.reference_allele, 
+                GenomicVariant.alternative_allele
+            ).where(
+                and_(
+                    GenomicVariant.chromosome == chrom,
+                    GenomicVariant.position >= start,
+                    GenomicVariant.position <= stop
+                )
+            )
+            
+            # Reconstruct map: (chr, pos, ref, alt) -> DB_ID
+            variant_id_map = {}
+            for row in session.execute(stmt):
+                k = (row.chromosome, row.position, row.reference_allele, row.alternative_allele)
+                variant_id_map[k] = row.id
+
+            # ---------------------------------------------------------
+            # 6. Bulk Insert Dependent Data
+            # ---------------------------------------------------------
+            
+            # Map Genotypes to Variant IDs
+            genotypes_to_insert = []
+            for item in genotypes_buffer:
+                if item['key'] in variant_id_map:
+                    genotypes_to_insert.append({
+                        'variant_id': variant_id_map[item['key']],
+                        'sample_id': item['sample_id'],
+                        'genotype': item['genotype']
+                    })
+
+            # Map GWAS Stats to Variant IDs
+            gwas_to_insert = []
+            for item in gwas_buffer:
+                if item['key'] in variant_id_map:
+                    gwas_to_insert.append({
+                        'variant_id': variant_id_map[item['key']],
+                        'p_value': item['p_value'],
+                        'beta': item['beta'],
+                        'trait': item['trait']
+                    })
+
+            # Execute Bulk Inserts (using standard SQL insert for speed)
+            if genotypes_to_insert:
+                print(f"Inserting {len(genotypes_to_insert)} genotypes...")
+                for chunk in chunked(genotypes_to_insert, CHUNK_SIZE):
+                    session.execute(insert(SampleGenotype.__table__), chunk)
+            
+            if gwas_to_insert:
+                print(f"Inserting {len(gwas_to_insert)} GWAS stats...")
+                for chunk in chunked(gwas_to_insert, CHUNK_SIZE):
+                    session.execute(insert(GWASStatistic.__table__), chunk)
+
+            session.commit()
+            print("Genetics data load complete.")
 
     def load_gencode_gtf(self, gtf_file: str, overwrite=False) -> None:
         with self.get_session() as session:

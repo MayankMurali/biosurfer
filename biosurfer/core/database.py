@@ -30,6 +30,15 @@ from sqlalchemy.sql.expression import desc
 from sqlalchemy.sql.functions import func
 from tqdm import tqdm
 
+
+# Adding genetics functionality 
+
+import pysam
+import pandas as pd
+from biosurfer.core.models.genetics import GenomicVariant, GWASStatistic, SampleGenotype
+
+
+
 CHUNK_SIZE = 5000
 SQANTI_DICT = {
     'full-splice_match': SQANTI.FSM,
@@ -85,6 +94,99 @@ class Database:
         print(f'Recreating tables in {self.url} ...')
         Base.metadata.drop_all(bind=self._engine)
         Base.metadata.create_all(bind=self._engine)
+
+
+
+  def load_genetics_data(self, vcf_path: str, gwas_path: str, gene_name: str):
+    """
+    Loads VCF and GWAS data specifically for the coordinates of a target gene.
+    """
+    with self.get_session() as session:
+        # 1. Get Gene Coordinates
+        gene = Gene.from_name(session, gene_name)
+        if not gene:
+            print(f"Gene {gene_name} not found in DB. Load GTF first.")
+            return
+
+        chrom = gene.chromosome_id
+        start = gene.start
+        stop = gene.stop
+        
+        print(f"Loading genetics for {gene_name} ({chrom}:{start}-{stop})...")
+
+        # 2. Parse VCF (Genotyping) using pysam (requires indexed VCF)
+        # Assumes VCF is bgzipped and tabix indexed (.tbi)
+        vcf = pysam.VariantFile(vcf_path)
+        
+        # Buffer to bulk insert
+        variants_map = {} # Key: (chr, pos, ref, alt) -> Variant Object
+        
+        try:
+            for record in vcf.fetch(chrom, start, stop):
+                # Basic filtering for SNPs/Indels
+                ref = record.ref
+                for alt in record.alts:
+                    key = (chrom, record.pos, ref, alt)
+                    
+                    if key not in variants_map:
+                        var = GenomicVariant(
+                            chromosome=chrom, 
+                            position=record.pos,
+                            reference_allele=ref,
+                            alternative_allele=alt,
+                            rsid=record.id
+                        )
+                        session.add(var)
+                        session.flush() # Get ID
+                        variants_map[key] = var
+                    
+                    # Store Genotypes for your cohort
+                    for sample in record.samples:
+                        gt = record.samples[sample]['GT'] # Returns (0, 1) etc
+                        if gt != (0, 0): # Skip homozygous reference to save space
+                            session.add(SampleGenotype(
+                                variant_id=variants_map[key].id,
+                                sample_id=sample,
+                                genotype=f"{gt[0]}/{gt[1]}"
+                            ))
+        except ValueError as e:
+            print(f"Error fetching VCF region: {e}. Ensure VCF is tabix indexed.")
+
+        # 3. Load GWAS Summary Stats
+        # Assuming a TAB-separated file with columns: CHR, POS, REF, ALT, P, BETA
+        # Using pandas for ease, filtering by chunk
+        chunk_size = 100000
+        for chunk in pd.read_csv(gwas_path, sep='\t', chunksize=chunk_size):
+            # Filter for gene region
+            region_mask = (chunk['CHR'].astype(str) == chrom) & \
+                          (chunk['POS'] >= start) & \
+                          (chunk['POS'] <= stop)
+            
+            subset = chunk[region_mask]
+            
+            for _, row in subset.iterrows():
+                # Check if variant exists from VCF load, or create new
+                key = (str(row['CHR']), row['POS'], row['REF'], row['ALT'])
+                
+                if key not in variants_map:
+                    var = GenomicVariant(
+                        chromosome=str(row['CHR']), 
+                        position=row['POS'],
+                        reference_allele=row['REF'],
+                        alternative_allele=row['ALT']
+                    )
+                    session.add(var)
+                    session.flush()
+                    variants_map[key] = var
+                
+                session.add(GWASStatistic(
+                    variant_id=variants_map[key].id,
+                    p_value=row['P'],
+                    beta=row['BETA'],
+                    trait="T2D"
+                ))
+        
+        session.commit()
 
     def load_gencode_gtf(self, gtf_file: str, overwrite=False) -> None:
         with self.get_session() as session:

@@ -22,7 +22,8 @@ from biosurfer.core.models.biomolecules import (ORF, Chromosome, Exon,
 from biosurfer.core.models.features import (Domain, Feature, ProjectedFeature,
                                             ProteinFeature)
 from more_itertools import chunked
-from sqlalchemy import create_engine, delete, event, select
+# --- FIXED: Added 'and_' to imports ---
+from sqlalchemy import create_engine, delete, event, select, and_
 from sqlalchemy.dialects.sqlite import insert
 from sqlalchemy.engine import Engine
 from sqlalchemy.orm import contains_eager, joinedload, raiseload, scoped_session, sessionmaker
@@ -32,11 +33,9 @@ from tqdm import tqdm
 
 
 # Adding genetics functionality 
-
 import pysam
 import pandas as pd
 from biosurfer.core.models.genetics import GenomicVariant, GWASStatistic, SampleGenotype
-
 
 
 CHUNK_SIZE = 5000
@@ -95,210 +94,114 @@ class Database:
         Base.metadata.drop_all(bind=self._engine)
         Base.metadata.create_all(bind=self._engine)
 
-
+    # --- NEW METHOD: Get variants for plotting ---
+    def get_gene_variants(self, session, gene_name: str) -> list['GenomicVariant']:
+        """Retrieves genomic variants located within the start/stop boundaries of a gene."""
+        gene = Gene.from_name(session, gene_name)
+        if not gene:
+            return []
+            
+        # Query variants on the same chromosome within the gene's range
+        query = select(GenomicVariant).where(
+            and_(
+                GenomicVariant.chromosome == gene.chromosome_id,
+                GenomicVariant.position >= gene.start,
+                GenomicVariant.position <= gene.stop
+            )
+        )
+        return session.execute(query).scalars().all()
 
     def load_genetics_data(self, vcf_path: str, gwas_path: str, gene_name: str):
-            """
-            Loads VCF and GWAS data specifically for the coordinates of a target gene.
-            Optimized for bulk loading using batch inserts.
-            """
-            from sqlalchemy import select, and_
+        """
+        Loads VCF and GWAS data specifically for the coordinates of a target gene.
+        """
+        with self.get_session() as session:
+            # 1. Get Gene Coordinates
+            gene = Gene.from_name(session, gene_name)
+            if not gene:
+                print(f"Gene {gene_name} not found in DB. Load GTF first.")
+                return
+
+            chrom = gene.chromosome_id
+            start = gene.start
+            stop = gene.stop
             
-            with self.get_session() as session:
-                # 1. Get Gene Coordinates
-                gene = Gene.from_name(session, gene_name)
-                if not gene:
-                    print(f"Gene {gene_name} not found in DB. Load GTF first.")
-                    return
+            print(f"Loading genetics for {gene_name} ({chrom}:{start}-{stop})...")
 
-                chrom = gene.chromosome_id
-                start = gene.start
-                stop = gene.stop
+            # 2. Parse VCF (Genotyping) using pysam (requires indexed VCF)
+            vcf = pysam.VariantFile(vcf_path)
+            
+            # Buffer to bulk insert
+            variants_map = {} # Key: (chr, pos, ref, alt) -> Variant Object
+            
+            try:
+                for record in vcf.fetch(chrom, start, stop):
+                    # Basic filtering for SNPs/Indels
+                    ref = record.ref
+                    for alt in record.alts:
+                        key = (chrom, record.pos, ref, alt)
+                        
+                        if key not in variants_map:
+                            var = GenomicVariant(
+                                chromosome=chrom, 
+                                position=record.pos,
+                                reference_allele=ref,
+                                alternative_allele=alt,
+                                rsid=record.id
+                            )
+                            session.add(var)
+                            session.flush() # Get ID
+                            variants_map[key] = var
+                        
+                        # Store Genotypes for your cohort
+                        for sample in record.samples:
+                            gt = record.samples[sample]['GT'] # Returns (0, 1) etc
+                            if gt != (0, 0): # Skip homozygous reference to save space
+                                session.add(SampleGenotype(
+                                    variant_id=variants_map[key].id,
+                                    sample_id=sample,
+                                    genotype=f"{gt[0]}/{gt[1]}"
+                                ))
+            except ValueError as e:
+                print(f"Error fetching VCF region: {e}. Ensure VCF is tabix indexed.")
+
+            # 3. Load GWAS Summary Stats
+            # Assuming a TAB-separated file with columns: CHR, POS, REF, ALT, P, BETA
+            chunk_size = 100000
+            for chunk in pd.read_csv(gwas_path, sep='\t', chunksize=chunk_size):
+                # Filter for gene region
+                region_mask = (chunk['CHR'].astype(str) == chrom) & \
+                            (chunk['POS'] >= start) & \
+                            (chunk['POS'] <= stop)
                 
-                print(f"Loading genetics for {gene_name} ({chrom}:{start}-{stop})...")
-
-                # Data structures for buffering unique variants
-                # Key: (chromosome, position, reference_allele, alternative_allele)
-                unique_variants = {} 
+                subset = chunk[region_mask]
                 
-                # Buffers for dependent data
-                genotypes_buffer = [] 
-                gwas_buffer = []
-
-                # ---------------------------------------------------------
-                # 2. Parse VCF (Genotyping)
-                # ---------------------------------------------------------
-                if os.path.exists(vcf_path):
-                    try:
-                        vcf = pysam.VariantFile(vcf_path)
-                        # pysam fetch uses 0-based, half-open coordinates. 
-                        # Gene start is 1-based, so subtract 1.
-                        for record in vcf.fetch(chrom, start - 1, stop):
-                            # record.pos is 1-based (matches Biosurfer DB)
-                            pos = record.pos
-                            ref = record.ref
-                            
-                            for alt in record.alts:
-                                key = (chrom, pos, ref, alt)
-                                
-                                if key not in unique_variants:
-                                    unique_variants[key] = {
-                                        'chromosome': chrom,
-                                        'position': pos,
-                                        'reference_allele': ref,
-                                        'alternative_allele': alt,
-                                        'rsid': record.id if record.id else None
-                                    }
-                                
-                                # Collect Genotypes (filtering for non-reference to save space)
-                                for sample_name, sample_dat in record.samples.items():
-                                    gt = sample_dat['GT']
-                                    # Skip homozygous ref (0, 0) and missing data
-                                    if gt != (0, 0) and None not in gt:
-                                        genotypes_buffer.append({
-                                            'key': key, # Temporary link
-                                            'sample_id': sample_name,
-                                            'genotype': f"{gt[0]}/{gt[1]}"
-                                        })
-                    except ValueError as e:
-                        print(f"Error fetching VCF region: {e}. Ensure VCF is bgzipped and tabix indexed.")
-                        return
-                else:
-                    print(f"Warning: VCF file not found at {vcf_path}")
-
-                # ---------------------------------------------------------
-                # 3. Load GWAS Summary Stats
-                # ---------------------------------------------------------
-                if os.path.exists(gwas_path):
-                    chunk_size = 100000
-                    try:
-                        for chunk in pd.read_csv(gwas_path, sep='\t', chunksize=chunk_size):
-                            # Ensure columns are compatible types
-                            chunk['CHR'] = chunk['CHR'].astype(str)
-                            
-                            # Filter for gene region in this chunk
-                            region_mask = (chunk['CHR'] == chrom) & \
-                                        (chunk['POS'] >= start) & \
-                                        (chunk['POS'] <= stop)
-                            
-                            subset = chunk[region_mask]
-                            
-                            for _, row in subset.iterrows():
-                                r_chrom = str(row['CHR'])
-                                r_pos = int(row['POS'])
-                                r_ref = str(row['REF'])
-                                r_alt = str(row['ALT'])
-                                
-                                key = (r_chrom, r_pos, r_ref, r_alt)
-                                
-                                if key not in unique_variants:
-                                    unique_variants[key] = {
-                                        'chromosome': r_chrom,
-                                        'position': r_pos,
-                                        'reference_allele': r_ref,
-                                        'alternative_allele': r_alt,
-                                        'rsid': None 
-                                    }
-                                
-                                gwas_buffer.append({
-                                    'key': key,
-                                    'p_value': float(row['P']),
-                                    'beta': float(row['BETA']),
-                                    'trait': "T2D" 
-                                })
-                    except Exception as e:
-                        print(f"Error reading GWAS file: {e}")
-                else:
-                    print(f"Warning: GWAS file not found at {gwas_path}")
-
-                if not unique_variants:
-                    print("No variants found in the specified gene region.")
-                    return
-
-                # ---------------------------------------------------------
-                # 4. Bulk Insert Variants
-                # ---------------------------------------------------------
-                print(f"Upserting {len(unique_variants)} unique variants...")
-                
-                # bulk_upsert ensures we don't duplicate variants if they already exist
-                variants_list = list(unique_variants.values())
-                bulk_upsert(session, GenomicVariant.__table__, variants_list, 
-                            primary_keys=('chromosome', 'position', 'reference_allele', 'alternative_allele'))
-                
-                # ---------------------------------------------------------
-                # 5. Retrieve Variant IDs
-                # ---------------------------------------------------------
-                # We need the IDs generated by the DB to link Genotypes and GWAS stats.
-                print("Mapping variant IDs...")
-                stmt = select(
-                    GenomicVariant.id, 
-                    GenomicVariant.chromosome, 
-                    GenomicVariant.position, 
-                    GenomicVariant.reference_allele, 
-                    GenomicVariant.alternative_allele
-                ).where(
-                    and_(
-                        GenomicVariant.chromosome == chrom,
-                        GenomicVariant.position >= start,
-                        GenomicVariant.position <= stop
-                    )
-                )
-                
-                # Reconstruct map: (chr, pos, ref, alt) -> DB_ID
-                variant_id_map = {}
-                for row in session.execute(stmt):
-                    k = (row.chromosome, row.position, row.reference_allele, row.alternative_allele)
-                    variant_id_map[k] = row.id
-
-                # ---------------------------------------------------------
-                # 6. Bulk Insert Dependent Data
-                # ---------------------------------------------------------
-                
-                # Map Genotypes to Variant IDs
-                genotypes_to_insert = []
-                for item in genotypes_buffer:
-                    if item['key'] in variant_id_map:
-                        genotypes_to_insert.append({
-                            'variant_id': variant_id_map[item['key']],
-                            'sample_id': item['sample_id'],
-                            'genotype': item['genotype']
-                        })
-
-                # Map GWAS Stats to Variant IDs
-                gwas_to_insert = []
-                for item in gwas_buffer:
-                    if item['key'] in variant_id_map:
-                        gwas_to_insert.append({
-                            'variant_id': variant_id_map[item['key']],
-                            'p_value': item['p_value'],
-                            'beta': item['beta'],
-                            'trait': item['trait']
-                        })
-
-                # Execute Bulk Inserts (using standard SQL insert for speed)
-                if genotypes_to_insert:
-                    print(f"Inserting {len(genotypes_to_insert)} genotypes...")
-                    for chunk in chunked(genotypes_to_insert, CHUNK_SIZE):
-                        session.execute(insert(SampleGenotype.__table__), chunk)
-                
-                if gwas_to_insert:
-                    print(f"Inserting {len(gwas_to_insert)} GWAS stats...")
-                    for chunk in chunked(gwas_to_insert, CHUNK_SIZE):
-                        session.execute(insert(GWASStatistic.__table__), chunk)
-
-                session.commit()
-                print("Genetics data load complete.")
+                for _, row in subset.iterrows():
+                    # Check if variant exists from VCF load, or create new
+                    key = (str(row['CHR']), row['POS'], row['REF'], row['ALT'])
+                    
+                    if key not in variants_map:
+                        var = GenomicVariant(
+                            chromosome=str(row['CHR']), 
+                            position=row['POS'],
+                            reference_allele=row['REF'],
+                            alternative_allele=row['ALT']
+                        )
+                        session.add(var)
+                        session.flush()
+                        variants_map[key] = var
+                    
+                    session.add(GWASStatistic(
+                        variant_id=variants_map[key].id,
+                        p_value=row['P'],
+                        beta=row['BETA'],
+                        trait="T2D"
+                    ))
+            
+            session.commit()
 
     def load_gencode_gtf(self, gtf_file: str, overwrite=False) -> None:
         with self.get_session() as session:
-            # if overwrite:
-            #     with session.begin():
-            #         for model in (Chromosome, Gene, Exon, ORF):
-            #             print(f'Clearing table \'{model.__tablename__}\'...')
-            #             session.execute(delete(model.__table__))
-            #         print(f'Clearing GENCODE transcripts from \'{Transcript.__tablename__}\'...')
-            #         session.execute(delete(Transcript.__table__).where(Transcript.type == 'gencodetranscript'))
-
             chromosomes = {}
             genes_to_upsert = []
             transcripts_to_upsert = []
@@ -316,7 +219,7 @@ class Database:
                     if line.startswith("#"): 
                         continue
                     chr, _, feature, start, stop, _, strand, _, attributes, tags = read_gtf_line(line)
-                    if any('_NF' in tag for tag in tags):  # biosurfer does not handle start_NF and end_NF transcripts very well
+                    if any('_NF' in tag for tag in tags):  
                         continue
                     gene_id = attributes['gene_id']
                     gene_name = attributes['gene_name']
@@ -349,8 +252,6 @@ class Database:
                             if 'appris_alternative' in tag:
                                 appris = APPRIS.ALTERNATIVE
                             start_nf, end_nf = False, False
-                            # start_nf = start_nf or 'start_NF' in tag
-                            # end_nf = end_nf or 'end_NF' in tag
                         transcript = {
                             'accession': transcript_id,
                             'name': transcript_name,
@@ -395,7 +296,6 @@ class Database:
                 bulk_upsert(session, Gene.__table__, genes_to_upsert)
                 bulk_upsert(session, GencodeTranscript, transcripts_to_upsert)
 
-            # calculate the coordinates of each exon relative to the sequence of its parent transcript
             _process_exons(transcripts_to_exons, minus_transcripts)
             t = tqdm(
                 exons_to_upsert,
@@ -406,7 +306,6 @@ class Database:
             for exons in chunked(t, CHUNK_SIZE):
                 bulk_upsert(session, Exon.__table__, exons, primary_keys=('accession', 'transcript_id'))
 
-            # assemble CDS intervals into ORFs
             orfs_to_upsert = _process_orfs(transcripts_to_cdss, transcripts_to_exons, minus_transcripts)
             t = tqdm(
                 orfs_to_upsert,
@@ -419,15 +318,6 @@ class Database:
 
     def load_pacbio_gtf(self, gtf_file: str, overwrite=False) -> None:
         with self.get_session() as session:
-            # if overwrite:
-            #     existing_genes = {}
-            #     with session.begin():
-            #         for model in (Chromosome, Gene, Exon, ORF):
-            #             print(f'Clearing table \'{model.__tablename__}\'...')
-            #             session.execute(delete(model.__table__))
-            #         print(f'Clearing PacBio transcripts from \'{Transcript.__tablename__}\'...')
-            #         session.execute(delete(Transcript.__table__).where(Transcript.type == 'pacbiotranscript'))
-            # else:
             with session.begin():
                 existing_genes = {row.name: row.accession for row in session.query(Gene.name, Gene.accession).all()}
 
@@ -506,7 +396,6 @@ class Database:
                 bulk_upsert(session, Gene.__table__, genes_to_insert)
                 bulk_upsert(session, PacBioTranscript, transcripts_to_upsert)
 
-            # calculate the coordinates of each exon relative to the sequence of its parent transcript
             _process_exons(transcripts_to_exons, minus_transcripts)
             t = tqdm(
                 exons_to_upsert,
@@ -517,7 +406,6 @@ class Database:
             for exons in chunked(t, CHUNK_SIZE):
                 bulk_upsert(session, Exon.__table__, exons, primary_keys=('accession', 'transcript_id'))
 
-            # assemble CDS intervals into ORFs
             orfs_to_upsert = _process_orfs(transcripts_to_cdss, transcripts_to_exons, minus_transcripts)
             t = tqdm(
                 orfs_to_upsert,
@@ -552,7 +440,6 @@ class Database:
                     transcripts_to_update.append(transcript)
                 if transcript_id in existing_orfs:
                     position, tx_start, tx_stop = existing_orfs[transcript_id]
-                    # if orf is followed by a stop codon in transcript sequence, modify tx_stop to include the stop codon
                     if sequence[tx_stop:tx_stop+3] in STOP_CODONS:
                         orfs_to_update.append({
                             'transcript_id': transcript_id,
@@ -570,11 +457,6 @@ class Database:
 
     def load_translation_fasta(self, translation_fasta: str, id_extractor: Callable[[str], 'FastaHeaderFields'], id_filter: Callable[[str], bool] = lambda x: False, overwrite: bool = False):
         with self.get_session() as session:
-            # if overwrite:
-            #     with session.begin():
-            #         print(f'Clearing table \'{Protein.__tablename__}\'...')
-            #         session.execute(delete(Protein.__table__))
-
             with session.begin():
                 existing_orfs = {}
                 for transcript_id, position, start, stop, has_stop_codon in session.query(ORF.transcript_id, ORF.position, ORF.transcript_start, ORF.transcript_stop, ORF.has_stop_codon):
@@ -646,12 +528,6 @@ class Database:
                 bulk_upsert(session, PacBioTranscript.__table__, transcripts_to_update)
 
     def load_domains(self, domain_file: str, overwrite: bool = False):
-        # if overwrite:
-        #     print(f'Clearing domains from table \'{Feature.__tablename__}\'...')
-        #     with self.get_session() as session:
-        #         with session.begin():
-        #             session.execute(delete(Feature.__table__).where(Feature.type == FeatureType.DOMAIN))
-
         with open(domain_file) as f:
             lines = count_lines(f)
             reader = csv.reader(f, delimiter='\t')
@@ -747,10 +623,6 @@ class Database:
             
     def project_feature_mappings(self, gene_ids: Iterable[str] = None, overwrite: bool = False):
         with self.get_session() as session:
-            # if overwrite:
-            #     with session.begin():
-            #         print(f'Clearing non-reference mappings from table \'{ProteinFeature.__tablename__}\'...')
-            #         session.execute(delete(ProteinFeature.__table__).where(~ProteinFeature.reference))
             protein_tx = contains_eager(Protein.orf).contains_eager(ORF.transcript)
             q = (
                 select(Protein, Transcript.gene_id).
@@ -770,7 +642,6 @@ class Database:
                     raiseload('*')
                 )
             )
-            # tqdm.write(str(q))
             if not gene_ids:
                 gene_ids = list(session.execute(
                     select(Transcript.gene_id).distinct().
@@ -825,19 +696,13 @@ class Database:
                                 record['anchor_id'] = proj_feat.anchor.id
                                 domains_to_insert.append(record)
                     t.update(len(proteins))
-                # if len(domains_to_insert) > CHUNK_SIZE:
                 if domains_to_insert:
                     session.execute(insert(ProteinFeature.__table__).on_conflict_do_nothing(), domains_to_insert)
                     session.commit()
                     domains_to_insert[:] = []
-            # if domains_to_insert:
-            #     session.execute(insert(ProteinFeature.__table__).on_conflict_do_nothing(), domains_to_insert)
-            # session.commit()
-            # Alignment.__new__.cache_clear()
 
 
 def _process_exons(transcripts_to_exons, minus_transcripts):
-    # calculate the coordinates of each exon relative to the sequence of its parent transcript
     t = tqdm(
         transcripts_to_exons.items(),
         desc = 'Calculating transcript-relative exon coords',
@@ -858,7 +723,6 @@ def _process_exons(transcripts_to_exons, minus_transcripts):
 
 
 def _process_orfs(transcripts_to_cdss, transcripts_to_exons, minus_transcripts):
-    # assemble CDS intervals into ORFs
     orfs_to_upsert = []
     t = tqdm(
         transcripts_to_cdss.items(),
@@ -870,26 +734,23 @@ def _process_orfs(transcripts_to_cdss, transcripts_to_exons, minus_transcripts):
         exon_list = transcripts_to_exons[transcript_id]
         cds_list.sort(key=itemgetter(0), reverse=transcript_id in minus_transcripts)
         first_cds, last_cds = cds_list[0], cds_list[-1]
-        # assuming that the first and last CDSs are the ORF boundaries -- won't work when dealing with multiple ORFs
         orf_start = first_cds[0]
         orf_stop = last_cds[1]
         if transcript_id in minus_transcripts:
             orf_start, orf_stop = orf_stop, orf_start
         first_exon = next((exon for exon in exon_list if exon['start'] <= first_cds[0] and first_cds[1] <= exon['stop']), None)
         last_exon = next((exon for exon in reversed(exon_list) if exon['start'] <= last_cds[0] and last_cds[1] <= exon['stop']), None)
-        # find ORF start/end relative to exons
         if transcript_id not in minus_transcripts:
             first_offset = first_cds[0] - first_exon['start']
             last_offset = last_exon['stop'] - last_cds[1]
         else:
             first_offset = first_exon['stop'] - first_cds[1]
             last_offset = last_cds[0] - last_exon['start']
-        # convert to transcript-relative coords
         orf_tx_start = first_exon['transcript_start'] + first_offset
         orf_tx_stop = last_exon['transcript_stop'] - last_offset
         orf_length = orf_tx_stop - orf_tx_start + 1
         if orf_length % 3 != 0:
-            continue  # ORFs with nt lengths indivisible by 3 should not be considered
+            continue
         orfs_to_upsert.append({
             'transcript_id': transcript_id,
             'position': 1,
@@ -900,17 +761,13 @@ def _process_orfs(transcripts_to_cdss, transcripts_to_exons, minus_transcripts):
     return orfs_to_upsert
 
 
-# Create databases folder if it doesn't exist
 if not Database._databases_dir.exists():
     Database._databases_dir.mkdir()
 
 
-# Make sure SQLite enforces foreign key constraints
-# https://www.scrygroup.com/tutorial/2018-05-07/SQLite-foreign-keys/
 @event.listens_for(Engine, "connect")
 def _set_sqlite_pragma(dbapi_connection, connection_record):
     if isinstance(dbapi_connection, SQLite3Connection):
         cursor = dbapi_connection.cursor()
         cursor.execute("PRAGMA foreign_keys=ON;")
         cursor.close()
-

@@ -81,10 +81,12 @@ def run_hybrid_al(verbose, db_name, output: Path, gencode: bool, anchors: Path):
 @click.option('-o', '--output', type=click.Path(exists=True, file_okay=False, writable=True, path_type=Path), help='Directory in which to save plots')
 @click.option('-d', '--db_name', required=True, nargs=1, help='Database name')
 @click.option('--gene', type=str, help='Name of gene for which to plot all isoforms; overrides TRANSCRIPT_IDS')
+@click.option('--snps', is_flag=True, help='Overlay genetic variants (SNPs) from the database onto the plot')  # <--- NEW OPTION
 @click.argument('transcript_ids', nargs=-1)
-def plot_isoforms(verbose: bool, output: Path, gene: str, db_name: str, transcript_ids: tuple[str]):
+def plot_isoforms(verbose: bool, output: Path, gene: str, db_name: str, snps: bool, transcript_ids: tuple[str]):
     """Plot isoforms from a single gene, specified by TRANSCRIPT_IDS."""
-    run_plot(output, gene, db_name, transcript_ids)
+    # Pass the snps flag to the run_plot function
+    run_plot(output, gene, db_name, transcript_ids, show_snps=snps)
 
 
 @cli.command("analyze_nterm")

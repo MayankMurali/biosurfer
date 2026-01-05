@@ -627,10 +627,45 @@ class IsoformPlot:
                     zorder = 1.4
                 )
     
+    # --- NEW METHOD (Corrected) ---
+    def draw_variants(self, variants: Iterable[Any], color='red', marker='v'):
+        """
+        Draws markers for genomic variants (SNPs) on the isoform tracks.
+        Only plots a variant on a track if it falls within an exon of that isoform.
+        """
+        # Add entry to legend
+        if 'Genetic Variant' not in self._handles:
+            self._handles['Genetic Variant'] = mlines.Line2D(
+                [], [], color=color, marker=marker, linestyle='None', 
+                markersize=8, label='Genetic Variant', 
+                markeredgecolor='black', markeredgewidth=0.5
+            )
+
+        for track_idx, tx in enumerate(self.transcripts):
+            if not tx:
+                continue
+
+            for variant in variants:
+                # Check if the variant position overlaps with this transcript (using simple exon bounds check)
+                is_exonic = any(exon.start <= variant.position <= exon.stop for exon in tx.exons)
+                
+                if is_exonic:
+                    # Draw the point on the specific track
+                    self.draw_point(
+                        track=track_idx,
+                        pos=variant.position,
+                        marker=marker,
+                        color=color,
+                        markersize=8,
+                        zorder=3.0,
+                        markeredgecolor='black',  # Fixed kwarg here
+                        linewidth=0.5
+                    )
+
     def savefig(self, fig_path):
         self.fig.set_size_inches(20, 0.8 + 0.4*len(self.transcripts))
         plt.figure(self.fig)
-        plt.savefig(fig_path, facecolor='w', transparent=False, dpi=200, bbox_inches='tight')
+        plt.savefig(fig_path, facecolor='w', transparent=False, dpi=700, bbox_inches='tight')
 
 
 def generate_subtracks(intervals: Iterable[Tuple[int, int]], labels: Iterable):

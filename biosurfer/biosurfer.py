@@ -17,6 +17,7 @@ from biosurfer.core.models.biomolecules import Gene, Transcript
 from biosurfer.plots.plotting import IsoformPlot
 from biosurfer.analysis.plot_biosurfer import run_plot
 
+from biosurfer.core.database import Database
 from biosurfer.analysis.genetics_analyzer import analyze_nterm_risk
 
 @click.group(chain=True)
@@ -90,15 +91,28 @@ def plot_isoforms(verbose: bool, output: Path, gene: str, db_name: str, transcri
 @click.option('-v', '--verbose', is_flag=True, help="Print verbose messages")
 @click.option('-d', '--db_name', required=True, nargs=1, help='Database name')
 @click.option('--gene', required=True, help='Target gene to analyze (e.g., PPARG)')
-def analyze_nterm_risk_cmd(verbose, db_name, gene):
+@click.option('--vcf', required=True, help="Path to VCF file (bgzipped & tabix indexed)")
+@click.option('--gwas', required=True, help="Path to GWAS summary statistics (TSV)")
+@click.option('-o', '--output', type=click.Path(file_okay=False, writable=True, path_type=Path), help='Directory for output tables')
+def analyze_nterm_risk_cmd(verbose, db_name, gene, vcf, gwas, output):
     """
     Analyzes N-terminal differences for a specific gene to identify 
     GWAS hits located in unique N-terminal regions (e.g. PPARG1 vs PPARG2).
     """
     if verbose:
-        click.echo(f"Analyzing N-terminal risk for {gene} in database {db_name}...")
-    
+        click.echo(f"Initializing database: {db_name}...")
+        
     db = Database(db_name)
-    with db.get_session() as session:
-        analyze_nterm_risk(session, gene_name=gene)
     
+    # 1. Load Genetics Data into DB
+    if verbose:
+        click.echo(f"Loading genetics data for {gene}...")
+    
+    db.load_genetics_data(vcf_path=vcf, gwas_path=gwas, gene_name=gene)
+    
+    # 2. Run Analysis
+    if verbose:
+        click.echo(f"Running N-terminal risk analysis...")
+
+    # Pass the output directory to the analyzer
+    analyze_nterm_risk(db.get_session(), gene_name=gene, output_dir=output)

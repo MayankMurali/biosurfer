@@ -2,7 +2,7 @@ from biosurfer.core.database import Database
 from biosurfer.analysis.genetics_analyzer import analyze_nterm_risk
 
 # Connect to your populated DB
-db = Database("biosurfer_db") # or whatever your DB name is
+db = Database("biosurfer_db") 
 
 with db.get_session() as session:
     # Run the N-term specific analysis

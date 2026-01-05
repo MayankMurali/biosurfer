@@ -161,18 +161,38 @@ def count_lines(file_handle: 'TextIOBase', only: Optional[Callable[..., bool]] =
     return lines
 
 
+# def bulk_upsert(session, table, records, primary_keys=('accession',)):
+#     if records:
+#         fields = [field for field in records[0] if field not in primary_keys]
+#         with session.begin():
+#             stmt = insert(table)
+#             session.execute(
+#                 stmt.on_conflict_do_update(
+#                     index_elements = primary_keys,
+#                     set_ = {field: stmt.excluded[field] for field in fields}
+#                 ),
+#                 records
+#             )
+#         records[:] = []
+
 def bulk_upsert(session, table, records, primary_keys=('accession',)):
     if records:
         fields = [field for field in records[0] if field not in primary_keys]
-        with session.begin():
-            stmt = insert(table)
-            session.execute(
-                stmt.on_conflict_do_update(
-                    index_elements = primary_keys,
-                    set_ = {field: stmt.excluded[field] for field in fields}
-                ),
-                records
-            )
+        
+        stmt = insert(table)
+        upsert_stmt = stmt.on_conflict_do_update(
+            index_elements=primary_keys,
+            set_={field: stmt.excluded[field] for field in fields}
+        )
+        
+        # FIX: Check if transaction is active. 
+        # If active, participate in it. If not, start a new one.
+        if session.in_transaction():
+            session.execute(upsert_stmt, records)
+        else:
+            with session.begin():
+                session.execute(upsert_stmt, records)
+        
         records[:] = []
 
 

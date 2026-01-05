@@ -41,6 +41,7 @@ setup(
         'ipython',
         'pandas',
         'xlsxwriter',
+        'pysam',
         ],
     entry_points = {
         'console_scripts':[

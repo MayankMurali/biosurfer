@@ -3,6 +3,8 @@ from sqlalchemy.orm import relationship
 from biosurfer.core.models.base import Base, TablenameMixin
 from biosurfer.core.models.nonpersistent import Position
 from biosurfer.core.constants import Strand
+from sqlalchemy import UniqueConstraint
+
 
 class VariantType(str):
     SNP = "SNP"
@@ -13,6 +15,11 @@ class GenomicVariant(Base, TablenameMixin):
     Represents a specific genomic change (e.g., chr3:12345 A>G).
     Stored in 1-based genomic coordinates.
     """
+
+    # Enforce uniqueness so we don't store the same variant twice
+    __table_args__ = (
+        UniqueConstraint('chromosome', 'position', 'reference_allele', 'alternative_allele', name='_variant_uc'),
+    )
     id = Column(Integer, primary_key=True)
     chromosome = Column(String, index=True)
     position = Column(Integer, index=True)

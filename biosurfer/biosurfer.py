@@ -17,6 +17,8 @@ from biosurfer.core.models.biomolecules import Gene, Transcript
 from biosurfer.plots.plotting import IsoformPlot
 from biosurfer.analysis.plot_biosurfer import run_plot
 
+from biosurfer.analysis.genetics_analyzer import analyze_nterm_risk
+
 @click.group(chain=True)
 def cli():
     """
@@ -82,4 +84,21 @@ def run_hybrid_al(verbose, db_name, output: Path, gencode: bool, anchors: Path):
 def plot_isoforms(verbose: bool, output: Path, gene: str, db_name: str, transcript_ids: tuple[str]):
     """Plot isoforms from a single gene, specified by TRANSCRIPT_IDS."""
     run_plot(output, gene, db_name, transcript_ids)
+
+
+@cli.command("analyze_nterm")
+@click.option('-v', '--verbose', is_flag=True, help="Print verbose messages")
+@click.option('-d', '--db_name', required=True, nargs=1, help='Database name')
+@click.option('--gene', required=True, help='Target gene to analyze (e.g., PPARG)')
+def analyze_nterm_risk_cmd(verbose, db_name, gene):
+    """
+    Analyzes N-terminal differences for a specific gene to identify 
+    GWAS hits located in unique N-terminal regions (e.g. PPARG1 vs PPARG2).
+    """
+    if verbose:
+        click.echo(f"Analyzing N-terminal risk for {gene} in database {db_name}...")
+    
+    db = Database(db_name)
+    with db.get_session() as session:
+        analyze_nterm_risk(session, gene_name=gene)
     

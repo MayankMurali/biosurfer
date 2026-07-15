@@ -156,7 +156,7 @@ def generate_genetics_report(session, gene: Gene, anchor: Transcript, others: li
         print(f"Detailed risk report saved to: {output_file}")
 
 
-def analyze_nterm_risk(session, gene_name="PPARG", output_dir: Path = None):
+def analyze_nterm_risk(session, gene_name, output_dir: Path = None):
     """
     Analyzes N-terminal differences for a specific gene to identify GWAS hits.
     If output_dir is provided, saves full hybrid alignment tables with risk info.

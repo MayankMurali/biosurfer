@@ -109,7 +109,7 @@ class Database:
         )
         return session.execute(query).scalars().all()
 
-    def load_genetics_data(self, vcf_path: str, gwas_path: str, gene_name: str):
+    def load_genetics_data(self, vcf_path: str, gwas_path: str, gene_name: str, trait: str = 'GWAS'):
         """
         Loads VCF and GWAS data specifically for the coordinates of a target gene.
         """
@@ -193,7 +193,7 @@ class Database:
                         variant_id=variants_map[key].id,
                         p_value=row['P'],
                         beta=row['BETA'],
-                        trait="T2D"
+                        trait=trait
                     ))
             
             session.commit()

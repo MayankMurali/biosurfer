@@ -1,22 +1,18 @@
 import csv
-from operator import attrgetter
 from pathlib import Path
 
 import click
-from more_itertools import partition
 
 from biosurfer.analysis.genome_wide_alignment_analysis import run_hybrid_alignment_for_all_genes
-from biosurfer.core.alignments import ProteinAlignment
-from biosurfer.core.constants import APPRIS
 from biosurfer.core.database import Database
-from biosurfer.core.helpers import (get_ids_from_gencode_fasta,
-                                    get_ids_from_lrp_fasta,
-                                    get_ids_from_pacbio_fasta, skip_gencode,
-                                    skip_par_y)
-from biosurfer.core.models.biomolecules import Gene, Transcript
-from biosurfer.plots.plotting import IsoformPlot
+from biosurfer.core.io_helpers import (get_ids_from_gencode_fasta,
+                                       get_ids_from_lrp_fasta,
+                                       get_ids_from_pacbio_fasta, skip_gencode,
+                                       skip_par_y)
 from biosurfer.analysis.plot_biosurfer import run_plot
 from biosurfer.analysis.illustrate_figs import run_illustrate_analysis
+
+from biosurfer.analysis.genetics_analyzer import analyze_nterm_risk
 
 @click.group(chain=True)
 def cli():
@@ -79,12 +75,14 @@ def run_hybrid_al(verbose, db_name, output: Path, gencode: bool, anchors: Path):
 @click.option('-o', '--output', type=click.Path(exists=True, file_okay=False, writable=True, path_type=Path), help='Directory in which to save plots')
 @click.option('-d', '--db_name', required=True, nargs=1, help='Database name')
 @click.option('--gene', type=str, help='Name of gene for which to plot all isoforms; overrides TRANSCRIPT_IDS')
+@click.option('--snps', is_flag=True, help='Overlay genetic variants (SNPs) from the database onto the plot')  # <--- NEW OPTION
 @click.argument('transcript_ids', nargs=-1)
-def plot_isoforms(verbose: bool, output: Path, gene: str, db_name: str, transcript_ids: tuple[str]):
+def plot_isoforms(verbose: bool, output: Path, gene: str, db_name: str, snps: bool, transcript_ids: tuple[str]):
     """Plot isoforms from a single gene, specified by TRANSCRIPT_IDS."""
-    run_plot(output, gene, db_name, transcript_ids)
-    
-    
+    # Pass the snps flag to the run_plot function
+    run_plot(output, gene, db_name, transcript_ids, show_snps=snps)
+
+
 @click.command("illustrate")
 @click.option('-p', '--pblock_table', type=click.Path(exists=True, dir_okay=False, writable=True, path_type=Path), required=True, help='Path to the pblocks.tsv file')
 @click.option('-o', '--output', type=click.Path(exists=True, file_okay=False, writable=True, path_type=Path), required=True, help='Directory in which to save the illustrations')
@@ -94,3 +92,67 @@ def run_illustrate(pblock_table: Path, output: Path):
     run_illustrate_analysis(pblock_table, output)
 
 cli.add_command(run_illustrate)
+
+
+@cli.command("analyze_nterm")
+@click.option('-v', '--verbose', is_flag=True, help="Print verbose messages")
+@click.option('-d', '--db_name', required=True, nargs=1, help='Database name')
+@click.option('--gene', required=True, help='Target gene to analyze (e.g., PPARG)')
+@click.option('--vcf', required=True, help="Path to VCF file (bgzipped & tabix indexed)")
+@click.option('--gwas', required=True, help="Path to GWAS summary statistics (TSV)")
+@click.option('--trait', default='GWAS', help="Trait label to record for the loaded GWAS summary statistics (e.g. T2D)")
+@click.option('-o', '--output', type=click.Path(file_okay=False, writable=True, path_type=Path), help='Directory for output tables')
+def analyze_nterm_risk_cmd(verbose, db_name, gene, vcf, gwas, trait, output):
+    """
+    Analyzes N-terminal differences for a specific gene to identify
+    GWAS hits located in unique N-terminal regions (e.g. PPARG1 vs PPARG2).
+    """
+    if verbose:
+        click.echo(f"Initializing database: {db_name}...")
+
+    db = Database(db_name)
+
+    # 1. Load Genetics Data into DB
+    if verbose:
+        click.echo(f"Loading genetics data for {gene}...")
+
+    db.load_genetics_data(vcf_path=vcf, gwas_path=gwas, gene_name=gene, trait=trait)
+
+    # 2. Run Analysis
+    if verbose:
+        click.echo(f"Running N-terminal risk analysis...")
+
+    # Pass the output directory to the analyzer
+    analyze_nterm_risk(db.get_session(), gene_name=gene, output_dir=output)
+
+
+@cli.command("analyze_nterm")
+@click.option('-v', '--verbose', is_flag=True, help="Print verbose messages")
+@click.option('-d', '--db_name', required=True, nargs=1, help='Database name')
+@click.option('--gene', required=True, help='Target gene to analyze (e.g., PPARG)')
+@click.option('--vcf', required=True, help="Path to VCF file (bgzipped & tabix indexed)")
+@click.option('--gwas', required=True, help="Path to GWAS summary statistics (TSV)")
+@click.option('--trait', default='GWAS', help="Trait label to record for the loaded GWAS summary statistics (e.g. T2D)")
+@click.option('-o', '--output', type=click.Path(file_okay=False, writable=True, path_type=Path), help='Directory for output tables')
+def analyze_nterm_risk_cmd(verbose, db_name, gene, vcf, gwas, trait, output):
+    """
+    Analyzes N-terminal differences for a specific gene to identify
+    GWAS hits located in unique N-terminal regions (e.g. PPARG1 vs PPARG2).
+    """
+    if verbose:
+        click.echo(f"Initializing database: {db_name}...")
+
+    db = Database(db_name)
+
+    # 1. Load Genetics Data into DB
+    if verbose:
+        click.echo(f"Loading genetics data for {gene}...")
+
+    db.load_genetics_data(vcf_path=vcf, gwas_path=gwas, gene_name=gene, trait=trait)
+    
+    # 2. Run Analysis
+    if verbose:
+        click.echo(f"Running N-terminal risk analysis...")
+
+    # Pass the output directory to the analyzer
+    analyze_nterm_risk(db.get_session(), gene_name=gene, output_dir=output)

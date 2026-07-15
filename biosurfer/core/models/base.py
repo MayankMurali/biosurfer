@@ -1,6 +1,6 @@
 from typing import Iterable, Type
 from sqlalchemy import Column, String, select
-from sqlalchemy.ext.declarative import declarative_base, declared_attr
+from sqlalchemy.orm import declarative_base, declared_attr
 from sqlalchemy.orm.exc import NoResultFound
 
 Base = declarative_base()

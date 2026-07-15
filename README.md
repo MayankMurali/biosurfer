@@ -13,7 +13,11 @@
 **Contents**
 
 - [Installation](#installation)
-- [Features](#features)
+- [Usage](#usage)
+  - [1. Load database](#1-load-database)
+  - [2. Hybrid alignment](#2-hybrid-alignment)
+  - [3. Visualize protein isoforms](#3-visualize-protein-isoforms)
+  - [4. Genetics & Risk Analysis](#4-genetics--risk-analysis)
 - [References](#references)
 
 ## Installation
@@ -21,8 +25,8 @@
 
 #### Building Requirements
 
-* Python 3.9 or higher 
-* Python packages (numpy, more-itertools, intervaltree, biopython, attrs, tqdm)
+* Python 3.10 or higher 
+* Python packages (numpy, more-itertools, intervaltree, biopython, attrs, tqdm, pandas, pysam)
 * Database (sqlalchemy >=1.4)
 * Vizualization (matplotlib, brokenaxes)
 
@@ -114,6 +118,7 @@ Options:
                           isoform IDs in column 2
   --help                  Show this message and exit.
 ```
+> Please note that in the code, the terms *`anchor`* and *`other`* correspond to the *`reference`* and *`alternative`* isoforms mentioned in the manuscript.
 
 ### 3. Visualize protein isoforms
 * To visualization isoforms of *CRYBG2* gene, run the following snippet.
@@ -137,4 +142,33 @@ Options:
 ```
 
 
+### 4. Genetics & Risk Analysis
+Analyze specific genes to find GWAS hits located in unique N-terminal regions (e.g., PPARG).
 
+This module requires a VCF file (bgzipped & tabix indexed) and a GWAS summary statistics file (TSV format).
+
+```shell
+biosurfer analyze_nterm \
+    --db_name gencode_v42 \
+    --gene PPARG \
+    --vcf path/to/genotypes.vcf.gz \
+    --gwas path/to/gwas_summary.tsv \
+    --output results_folder \
+    --verbose
+```
+
+```
+Usage: biosurfer analyze_nterm [OPTIONS]
+
+  Analyzes N-terminal differences for a specific gene to identify 
+  GWAS hits located in unique N-terminal regions.
+
+Options:
+  -v, --verbose            Print verbose messages
+  -d, --db_name TEXT       Database name  [required]
+  --gene TEXT              Target gene to analyze (e.g., PPARG) [required]
+  --vcf TEXT               Path to VCF file (bgzipped & tabix indexed) [required]
+  --gwas TEXT              Path to GWAS summary statistics (TSV) [required]
+  -o, --output DIRECTORY   Directory for output tables
+  --help                   Show this message and exit.
+```

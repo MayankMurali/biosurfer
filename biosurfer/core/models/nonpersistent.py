@@ -1,11 +1,9 @@
 from abc import ABC, abstractmethod
 from collections import Counter
-from functools import cached_property
-from operator import attrgetter
 from typing import TYPE_CHECKING, List, Optional, Tuple, Union
 from warnings import warn
 
-from attrs import define, frozen, field, evolve, validators
+from attrs import frozen, field, evolve, validators
 from biosurfer.core.constants import Nucleobase, AminoAcid, Strand
 
 if TYPE_CHECKING:

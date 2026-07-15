@@ -16,7 +16,7 @@ setup(
     long_description_content_type="text/markdown",
     classifiers = [
         "Programming Language :: Python :: 3",
-        "Programming Language :: Python :: 3.9",
+        "Programming Language :: Python :: 3.10",
         "Intended Audience :: Science/Research",
         "Operating System :: OS Independent",
     ],
@@ -24,12 +24,12 @@ setup(
     zip_safe = False,
     include_package_data = True,
     packages = find_packages(),
-    python_requires = '>=3.9',
+    python_requires = '>=3.10',
     install_requires =[
         'attrs',
-        'biopython',
+        'biopython < 1.87',
         'brokenaxes',
-        'intervaltree @ git+https://github.com/chaimleib/intervaltree.git',
+        'intervaltree >= 3.2.1',
         'matplotlib',
         'more-itertools',
         'numpy',
@@ -43,7 +43,7 @@ setup(
         'openpyxl',
         'plotly',
         'ipykernel',
-        'seaborn',
+        'pysam',
         ],
     entry_points = {
         'console_scripts':[

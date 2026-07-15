@@ -1,14 +1,13 @@
 from functools import cached_property
 from operator import attrgetter
-from typing import Dict, Iterable, List, Optional, Tuple, Type
+from typing import Dict, List, Optional, Tuple
 from warnings import warn
 
 from Bio.Seq import Seq
 from biosurfer.core.constants import APPRIS, SQANTI, Strand
-from biosurfer.core.helpers import BisectDict
+from biosurfer.core.collections_utils import BisectDict
 from biosurfer.core.models.base import AccessionMixin, Base, NameMixin, TablenameMixin
 from biosurfer.core.models.nonpersistent import *
-from more_itertools import only
 from sqlalchemy import Boolean, Column, Enum, ForeignKey, Integer, String, func
 from sqlalchemy.ext.hybrid import hybrid_property
 from sqlalchemy.ext.orderinglist import ordering_list
@@ -437,20 +436,8 @@ class Protein(Base, TablenameMixin, AccessionMixin):
         order_by = 'ProteinFeature.protein_start'
     )
 
-    # def __init__(self, **kwargs):
-    #     super().__init__(**kwargs)
-    #     self.residues = []
-
-    # @reconstructor
-    # def init_on_load(self):
-    #     self.residues = [Residue(self, aa, i) for i, aa in enumerate(self.sequence + '*', start=1)]
-    #     if self.orf and self.orf.nucleotides:
-    #         self._link_aa_to_orf_nt()
-    
     @cached_property
     def residues(self):
-        # if not self.sequence.endswith('*'):
-        #     self.sequence += '*'
         _residues = [Residue(self, i+1) for i in range(len(self.sequence))]
         if self.orf:
             self.orf._link_aa_to_nt(_residues)

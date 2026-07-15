@@ -1,6 +1,6 @@
 #%%
 from biosurfer.core.database import Database
-from biosurfer.core.helpers import get_ids_from_gencode_fasta, skip_par_y
+from biosurfer.core.io_helpers import get_ids_from_gencode_fasta, skip_par_y
 import os
 
 #%%

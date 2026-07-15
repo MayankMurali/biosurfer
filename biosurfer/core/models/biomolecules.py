@@ -5,7 +5,7 @@ from warnings import warn
 
 from Bio.Seq import Seq
 from biosurfer.core.constants import APPRIS, SQANTI, Strand
-from biosurfer.core.helpers import BisectDict
+from biosurfer.core.collections_utils import BisectDict
 from biosurfer.core.models.base import AccessionMixin, Base, NameMixin, TablenameMixin
 from biosurfer.core.models.nonpersistent import *
 from sqlalchemy import Boolean, Column, Enum, ForeignKey, Integer, String, func

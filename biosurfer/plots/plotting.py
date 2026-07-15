@@ -15,8 +15,9 @@ from biosurfer.core.alignments import CodonAlignment, ProjectedFeature
 from biosurfer.core.constants import (FRAMESHIFT, SPLIT_CODON, AminoAcid,
                                       CodonAlignmentCategory, FeatureType,
                                       SequenceAlignmentCategory, Strand)
-from biosurfer.core.helpers import (ExceptionLogger, IntervalTree,
-                                    get_interval_overlap_graph)
+from biosurfer.core.algorithms import get_interval_overlap_graph
+from biosurfer.core.collections_utils import ExceptionLogger
+from intervaltree import IntervalTree
 from biosurfer.core.models.biomolecules import (GencodeTranscript,
                                                 PacBioTranscript, Transcript)
 from biosurfer.core.splice_events import (AcceptorSpliceEvent,

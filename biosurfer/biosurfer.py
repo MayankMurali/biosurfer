@@ -5,10 +5,10 @@ import click
 
 from biosurfer.analysis.genome_wide_alignment_analysis import run_hybrid_alignment_for_all_genes
 from biosurfer.core.database import Database
-from biosurfer.core.helpers import (get_ids_from_gencode_fasta,
-                                    get_ids_from_lrp_fasta,
-                                    get_ids_from_pacbio_fasta, skip_gencode,
-                                    skip_par_y)
+from biosurfer.core.io_helpers import (get_ids_from_gencode_fasta,
+                                       get_ids_from_lrp_fasta,
+                                       get_ids_from_pacbio_fasta, skip_gencode,
+                                       skip_par_y)
 from biosurfer.analysis.plot_biosurfer import run_plot
 
 from biosurfer.analysis.genetics_analyzer import analyze_nterm_risk

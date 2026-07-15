@@ -5,7 +5,7 @@ from operator import attrgetter, methodcaller
 from typing import Iterable, Union
 
 from attrs import evolve, field, frozen
-from biosurfer.core.helpers import get_interval_overlap_graph
+from biosurfer.core.algorithms import get_interval_overlap_graph
 from biosurfer.core.models.biomolecules import Exon, Transcript
 from biosurfer.core.models.nonpersistent import GenomeRange, Position, Junction
 from graph_tool import GraphView

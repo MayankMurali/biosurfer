@@ -1,7 +1,30 @@
 from enum import Flag, auto, Enum
 from typing import Union
 
-from biosurfer.core.helpers import OrderedEnum, StringEnum
+
+class OrderedEnum(Enum):
+    # https://docs.python.org/3/library/enum.html#orderedenum
+    def __ge__(self, other):
+        if self.__class__ is other.__class__:
+            return self.value >= other.value
+        return NotImplemented
+    def __gt__(self, other):
+        if self.__class__ is other.__class__:
+            return self.value > other.value
+        return NotImplemented
+    def __le__(self, other):
+        if self.__class__ is other.__class__:
+            return self.value <= other.value
+        return NotImplemented
+    def __lt__(self, other):
+        if self.__class__ is other.__class__:
+            return self.value < other.value
+        return NotImplemented
+
+
+class StringEnum(Enum):
+    def __str__(self):
+        return self.value
 
 
 class Strand(OrderedEnum):

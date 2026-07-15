@@ -10,8 +10,8 @@ from Bio import SeqIO
 from biosurfer.core.alignments import CodonAlignment
 from biosurfer.core.constants import (APPRIS, SQANTI, STOP_CODONS, AminoAcid,
                                       FeatureType, Strand)
-from biosurfer.core.helpers import (FastaHeaderFields,
-                                    bulk_upsert, count_lines, read_gtf_line)
+from biosurfer.core.io_helpers import (FastaHeaderFields,
+                                       bulk_upsert, count_lines, read_gtf_line)
 from biosurfer.core.models.base import Base
 from biosurfer.core.models.biomolecules import (ORF, Chromosome, Exon,
                                                 GencodeTranscript, Gene,

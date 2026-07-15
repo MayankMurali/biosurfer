@@ -7,7 +7,7 @@ from typing import TYPE_CHECKING
 from attrs import define, evolve, field, frozen
 from biosurfer.core.constants import ANCHOR_EXCLUSIVE, FRAMESHIFT, CD_DEL_INS, OTHER_EXCLUSIVE, SEQ_DEL_INS, SPLIT_CODON, CodonAlignmentCategory as CodonAlignCat
 from biosurfer.core.constants import SequenceAlignmentCategory as SeqAlignCat
-from biosurfer.core.helpers import Interval, IntervalTree
+from intervaltree import Interval, IntervalTree
 from biosurfer.core.models.biomolecules import Protein, Transcript
 from biosurfer.core.models.features import ProjectedFeature, ProteinFeature
 from biosurfer.core.splice_events import (BasicTranscriptEvent,

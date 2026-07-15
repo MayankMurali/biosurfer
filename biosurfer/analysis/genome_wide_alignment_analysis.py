@@ -9,7 +9,7 @@ from biosurfer.core.alignments import (CodonAlignment, ProteinAlignment,
                                        SeqAlignCat, TranscriptAlignment)
 from biosurfer.core.constants import APPRIS, CTerminalChange, NTerminalChange
 from biosurfer.core.database import Database
-from biosurfer.core.helpers import ExceptionLogger
+from biosurfer.core.collections_utils import ExceptionLogger
 from biosurfer.core.models.biomolecules import (ORF, GencodeTranscript, Gene, PacBioTranscript,
                                                 Protein,
                                                 Transcript)

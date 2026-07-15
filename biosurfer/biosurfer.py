@@ -16,6 +16,7 @@ from biosurfer.core.helpers import (get_ids_from_gencode_fasta,
 from biosurfer.core.models.biomolecules import Gene, Transcript
 from biosurfer.plots.plotting import IsoformPlot
 from biosurfer.analysis.plot_biosurfer import run_plot
+from biosurfer.analysis.illustrate_figs import run_illustrate_analysis
 
 @click.group(chain=True)
 def cli():
@@ -83,3 +84,13 @@ def plot_isoforms(verbose: bool, output: Path, gene: str, db_name: str, transcri
     """Plot isoforms from a single gene, specified by TRANSCRIPT_IDS."""
     run_plot(output, gene, db_name, transcript_ids)
     
+    
+@click.command("illustrate")
+@click.option('-p', '--pblock_table', type=click.Path(exists=True, dir_okay=False, writable=True, path_type=Path), required=True, help='Path to the pblocks.tsv file')
+@click.option('-o', '--output', type=click.Path(exists=True, file_okay=False, writable=True, path_type=Path), required=True, help='Directory in which to save the illustrations')
+def run_illustrate(pblock_table: Path, output: Path):
+    """Generate illustrations from Biosurfer results."""
+    click.echo('----- Running illustrate :', err=True)
+    run_illustrate_analysis(pblock_table, output)
+
+cli.add_command(run_illustrate)

@@ -4,10 +4,6 @@ from more_itertools import partition
 from biosurfer.core.alignments import ProteinAlignment
 from biosurfer.core.constants import APPRIS
 from biosurfer.core.database import Database
-from biosurfer.core.helpers import (get_ids_from_gencode_fasta,
-                                    get_ids_from_lrp_fasta,
-                                    get_ids_from_pacbio_fasta, skip_gencode,
-                                    skip_par_y)
 from biosurfer.core.models.biomolecules import Gene, Transcript
 from biosurfer.plots.plotting import IsoformPlot
 

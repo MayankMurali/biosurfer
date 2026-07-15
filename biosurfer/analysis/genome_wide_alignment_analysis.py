@@ -1,12 +1,9 @@
 # %%
-import multiprocessing as mp
 import sys
 from itertools import chain, starmap
 from operator import attrgetter
 from pathlib import Path
 
-import matplotlib.pyplot as plt
-import numpy as np
 import pandas as pd
 from biosurfer.core.alignments import (CodonAlignment, ProteinAlignment,
                                        SeqAlignCat, TranscriptAlignment)
@@ -17,14 +14,11 @@ from biosurfer.core.models.biomolecules import (ORF, GencodeTranscript, Gene, Pa
                                                 Protein,
                                                 Transcript)
 from biosurfer.core.splice_events import (BasicTranscriptEvent,
-                                          CompoundTranscriptEvent, SpliceEvent,
+                                          SpliceEvent,
                                           get_event_code)
-from IPython.display import display
-from more_itertools import first, one, only
-from sqlalchemy import func, select, and_
+from more_itertools import one
+from sqlalchemy import select, and_
 from tqdm import tqdm
-import os
-import pickle
 
 
 
@@ -37,9 +31,6 @@ def run_hybrid_alignment_for_all_genes(db_name, output_dir: 'Path', gencode: boo
     Returns:
       Nothing
     """
-
-    # plt.rcParams['svg.fonttype'] = 'none'
-    # sns.set_style('whitegrid')
 
     cblock_dir = output_dir/'cblock-tables'
     log_dir = output_dir/'alignment-errors'
@@ -220,7 +211,6 @@ def get_cblocks(db_name: str, output_dir: 'Path', log_dir: 'Path', gencode: bool
             dfs[chr].to_csv(df_file, sep='\t', index=False)
     
     cblock_df = pd.concat(dfs.values(), keys=dfs.keys(), names=['chr', 'row']).fillna(value='').reset_index().drop(columns='row')
-    # cblock_df['other_accession'] = cblock_df['other'].str.split('|').str.get(1)
     return cblock_df
 
 

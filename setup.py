@@ -28,7 +28,7 @@ setup(
     python_requires = '>=3.10',
     install_requires =[
         'attrs',
-        'biopython',
+        'biopython < 1.87',
         'brokenaxes',
         'intervaltree >= 3.2.1',
         'matplotlib',

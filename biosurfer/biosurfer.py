@@ -14,6 +14,10 @@ from biosurfer.analysis.illustrate_figs import run_illustrate_analysis
 
 from biosurfer.analysis.genetics_analyzer import analyze_nterm_risk
 from biosurfer.analysis.nmd.cli import run_analyze_nmd
+from biosurfer.analysis.conservation.cli import run_analyze_conservation
+from biosurfer.analysis.splicing.cli import run_analyze_splicing
+from biosurfer.analysis.disorder.cli import run_analyze_disorder
+from biosurfer.plots.interactive_cli import run_plot_interactive
 
 @click.group(chain=True)
 def cli():
@@ -127,3 +131,7 @@ def analyze_nterm_risk_cmd(verbose, db_name, gene, vcf, gwas, trait, output):
     analyze_nterm_risk(db.get_session(), gene_name=gene, output_dir=output)
 
 cli.add_command(run_analyze_nmd)
+cli.add_command(run_analyze_conservation)
+cli.add_command(run_analyze_splicing)
+cli.add_command(run_analyze_disorder)
+cli.add_command(run_plot_interactive)

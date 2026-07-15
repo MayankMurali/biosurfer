@@ -1,4 +1,4 @@
-from sqlalchemy import Column, Integer, String, Float, ForeignKey, Enum
+from sqlalchemy import Column, Integer, String, Float, ForeignKey
 from sqlalchemy.orm import relationship
 from biosurfer.core.models.base import Base, TablenameMixin
 from biosurfer.core.models.nonpersistent import Position

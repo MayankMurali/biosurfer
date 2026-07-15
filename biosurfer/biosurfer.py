@@ -13,6 +13,7 @@ from biosurfer.analysis.plot_biosurfer import run_plot
 from biosurfer.analysis.illustrate_figs import run_illustrate_analysis
 
 from biosurfer.analysis.genetics_analyzer import analyze_nterm_risk
+from biosurfer.analysis.nmd.cli import run_analyze_nmd
 
 @click.group(chain=True)
 def cli():
@@ -124,3 +125,5 @@ def analyze_nterm_risk_cmd(verbose, db_name, gene, vcf, gwas, trait, output):
 
     # Pass the output directory to the analyzer
     analyze_nterm_risk(db.get_session(), gene_name=gene, output_dir=output)
+
+cli.add_command(run_analyze_nmd)

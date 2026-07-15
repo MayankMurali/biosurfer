@@ -4,7 +4,7 @@ All notable changes to this fork are logged here. Format loosely follows
 [Keep a Changelog](https://keepachangelog.com/). See `CLAUDE.md` in the parent
 `biosurfer_analysis` folder for the full working log behind these entries.
 
-## [Unreleased]
+## [v0.3.0] - 2026-07-15
 
 ### Added — Stage B: first new analysis module
 - `biosurfer/analysis/nmd/` — nonsense-mediated decay (NMD) prediction, surfacing the

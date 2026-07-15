@@ -45,6 +45,12 @@ setup(
         'ipykernel',
         'pysam',
         ],
+    extras_require = {
+        # optional, additive Stage B capabilities -- base install stays free of these
+        'conservation': ['pyBigWig'],
+        'splicing': ['spliceai', 'tensorflow'],
+        'disorder': ['metapredict'],
+    },
     entry_points = {
         'console_scripts':[
             'biosurfer = biosurfer.biosurfer:cli',

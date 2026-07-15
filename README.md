@@ -18,6 +18,11 @@
   - [2. Hybrid alignment](#2-hybrid-alignment)
   - [3. Visualize protein isoforms](#3-visualize-protein-isoforms)
   - [4. Genetics & Risk Analysis](#4-genetics--risk-analysis)
+  - [5. Nonsense-Mediated Decay (NMD) Prediction](#5-nonsense-mediated-decay-nmd-prediction)
+  - [6. Conservation & Missense Pathogenicity Scoring](#6-conservation--missense-pathogenicity-scoring)
+  - [7. Splice-Site-Strength Scoring](#7-splice-site-strength-scoring)
+  - [8. Intrinsic Disorder Scoring](#8-intrinsic-disorder-scoring)
+  - [9. Interactive Isoform Viewer](#9-interactive-isoform-viewer)
 - [References](#references)
 
 ## Installation
@@ -28,7 +33,14 @@
 * Python 3.10 or higher 
 * Python packages (numpy, more-itertools, intervaltree, biopython, attrs, tqdm, pandas, pysam)
 * Database (sqlalchemy >=1.4)
-* Vizualization (matplotlib, brokenaxes)
+* Vizualization (matplotlib, brokenaxes, plotly)
+
+Optional extras (base install works fully without any of these -- only needed for the
+corresponding analysis in [Usage](#usage) below):
+
+* `pip install biosurfer[conservation]` -- phyloP/phastCons conservation scoring (`pyBigWig`)
+* `pip install biosurfer[splicing]` -- SpliceAI splice-site-strength scoring (`spliceai`, `tensorflow`)
+* `pip install biosurfer[disorder]` -- metapredict intrinsic disorder scoring (`metapredict`)
 
 #### Local building (without installation)
 
@@ -171,4 +183,152 @@ Options:
   --gwas TEXT              Path to GWAS summary statistics (TSV) [required]
   -o, --output DIRECTORY   Directory for output tables
   --help                   Show this message and exit.
+```
+
+### 5. Nonsense-Mediated Decay (NMD) Prediction
+Predicts NMD susceptibility (the standard 50-nt rule: a stop codon ≥50nt upstream of the
+last exon-exon junction) per transcript, per isoform-vs-anchor delta, or per genetic
+variant.
+
+```shell
+biosurfer analyze_nmd -d gencode_toy --gene CRYBG2 --mode isoform -o results_folder
+```
+
+```
+Usage: biosurfer analyze_nmd [OPTIONS]
+
+  Predicts nonsense-mediated decay (NMD) susceptibility for a gene's
+  transcripts, using the standard 50-nt rule (already implemented as
+  ORF.nmd in biosurfer.core.models.biomolecules).
+
+Options:
+  -v, --verbose           Print verbose messages
+  -d, --db_name TEXT       Database name  [required]
+  --gene TEXT              Target gene to analyze (e.g. PPARG)  [required]
+  --mode [transcript|isoform|variant]
+                           'transcript': per-transcript NMD status for every
+                           transcript of the gene. 'isoform': NMD status of
+                           every alternative isoform vs. the gene's anchor
+                           isoform. 'variant': for each SNP in --vcf
+                           overlapping the gene, whether it flips a
+                           transcript's NMD status.  [required]
+  --vcf PATH               Path to VCF file (bgzipped & tabix indexed).
+                           Required for --mode=variant.
+  -o, --output DIRECTORY   Directory for output tables  [required]
+  --help                   Show this message and exit.
+```
+
+### 6. Conservation & Missense Pathogenicity Scoring
+Scores nucleotide conservation (phyloP/phastCons) and/or AlphaMissense missense
+pathogenicity over the genomic span of each pblock/cblock in an isoform-vs-anchor
+comparison. Requires `pip install biosurfer[conservation]` for the conservation half;
+AlphaMissense scoring uses `pysam` (already a base dependency).
+
+```shell
+biosurfer analyze_conservation -d gencode_toy --gene CRYBG2 --bigwig -o results_folder
+```
+
+```
+Usage: biosurfer analyze_conservation [OPTIONS]
+
+  Scores a gene's alternative-vs-anchor isoform differences
+  (pblocks/cblocks) for nucleotide conservation (phyloP/phastCons) and/or
+  AlphaMissense missense pathogenicity, over the genomic span of each block.
+
+Options:
+  -v, --verbose            Print verbose messages
+  -d, --db_name TEXT       Database name  [required]
+  --gene TEXT              Target gene to analyze (e.g. PPARG)  [required]
+  --bigwig TEXT            Path or URL to a phyloP/phastCons bigWig
+                           conservation track. Pass with no value to use
+                           the UCSC hg38 100-way phyloP track; omit
+                           entirely to skip conservation scoring.
+  --no-conservation        Skip conservation scoring even if --bigwig is not
+                           given (default behavior).
+  --alphamissense PATH     Path to a bgzipped + tabix-indexed AlphaMissense
+                           TSV.
+  -o, --output DIRECTORY   Directory for output tables  [required]
+  --help                   Show this message and exit.
+```
+
+### 7. Splice-Site-Strength Scoring
+Scores SpliceAI donor/acceptor probability at every splice junction unique to an
+alternative isoform or unique to the gene's anchor isoform, to compare predicted
+splice-site strength between them. Requires `pip install biosurfer[splicing]` and an
+indexed reference genome FASTA matching the database's assembly.
+
+> SpliceAI's trained models are distributed under CC BY-NC 4.0 (academic/non-commercial
+> use only); see [github.com/Illumina/SpliceAI](https://github.com/Illumina/SpliceAI).
+
+```shell
+biosurfer analyze_splicing -d gencode_toy --gene CRYBG2 --genome-fasta hg38.fa -o results_folder
+```
+
+```
+Usage: biosurfer analyze_splicing [OPTIONS]
+
+  Scores SpliceAI donor/acceptor probability at every splice junction
+  unique to an alternative isoform or unique to the gene's anchor isoform,
+  to compare predicted splice-site strength between them.
+
+Options:
+  -v, --verbose            Print verbose messages
+  -d, --db_name TEXT       Database name  [required]
+  --gene TEXT              Target gene to analyze (e.g. PPARG)  [required]
+  --genome-fasta PATH      Indexed reference genome FASTA (.fai companion
+                           required)  [required]
+  --context INTEGER        SpliceAI receptive-field context size (bp)
+                           [default: 10000]
+  -o, --output DIRECTORY   Directory for output tables  [required]
+  --help                   Show this message and exit.
+```
+
+### 8. Intrinsic Disorder Scoring
+Scores intrinsic disorder (metapredict V3) for every alternative isoform vs. the gene's
+anchor isoform, over each protein/codon alignment block. Complementary to (not a
+replacement for) the MobiDB-lite IDR annotations already loaded via
+`load_feature_mappings`. Requires `pip install biosurfer[disorder]`.
+
+```shell
+biosurfer analyze_disorder -d gencode_toy --gene CRYBG2 -o results_folder
+```
+
+```
+Usage: biosurfer analyze_disorder [OPTIONS]
+
+  Scores intrinsic disorder (metapredict V3) for every alternative isoform
+  vs. the gene's anchor isoform, over each protein/codon alignment block,
+  to see whether alternative splicing disrupts disordered regions.
+
+Options:
+  -v, --verbose            Print verbose messages
+  -d, --db_name TEXT       Database name  [required]
+  --gene TEXT              Target gene to analyze (e.g. PPARG)  [required]
+  -o, --output DIRECTORY   Directory for output tables  [required]
+  --help                   Show this message and exit.
+```
+
+### 9. Interactive Isoform Viewer
+Renders isoform exon/CDS/UTR structure (with start/stop-codon markers) as a
+hoverable/zoomable/pannable HTML figure -- a companion to the static `plot` command
+above, not a replacement for it. Uses `plotly`, already a base dependency.
+
+```shell
+biosurfer plot_interactive -d gencode_toy --gene CRYBG2 -o results_folder
+```
+
+```
+Usage: biosurfer plot_interactive [OPTIONS] [TRANSCRIPT_IDS]...
+
+  Plot isoforms from a single gene (or a list of TRANSCRIPT_IDS) as an
+  interactive, hoverable/zoomable HTML figure -- a companion to the
+  existing static `plot` command, not a replacement for it.
+
+Options:
+  -v, --verbose           Print verbose messages
+  -o, --output DIRECTORY  Directory in which to save the interactive plot
+  -d, --db_name TEXT      Database name  [required]
+  --gene TEXT             Name of gene for which to plot all isoforms;
+                          overrides TRANSCRIPT_IDS
+  --help                  Show this message and exit.
 ```

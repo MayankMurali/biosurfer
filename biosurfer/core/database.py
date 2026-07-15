@@ -1,18 +1,16 @@
 import csv
-import os
 import re
 from itertools import chain, groupby
-from operator import attrgetter, itemgetter
+from operator import itemgetter
 from pathlib import Path
 from sqlite3 import Connection as SQLite3Connection
-from typing import TYPE_CHECKING, Callable, Dict, Iterable
-from warnings import warn
+from typing import Callable, Dict, Iterable
 
 from Bio import SeqIO
 from biosurfer.core.alignments import CodonAlignment
 from biosurfer.core.constants import (APPRIS, SQANTI, STOP_CODONS, AminoAcid,
                                       FeatureType, Strand)
-from biosurfer.core.helpers import (ExceptionLogger, FastaHeaderFields,
+from biosurfer.core.helpers import (FastaHeaderFields,
                                     bulk_upsert, count_lines, read_gtf_line)
 from biosurfer.core.models.base import Base
 from biosurfer.core.models.biomolecules import (ORF, Chromosome, Exon,

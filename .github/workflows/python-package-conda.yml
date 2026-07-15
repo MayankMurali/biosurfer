@@ -18,6 +18,12 @@ jobs:
       run: |
         # $CONDA is an environment variable pointing to the root of the miniconda directory
         echo $CONDA/bin >> $GITHUB_PATH
+    - name: Install graph-tool and biosurfer (editable)
+      run: |
+        # graph-tool is conda-only (see CLAUDE.md non-negotiables) -- this must run
+        # before pytest, which imports biosurfer.core.helpers -> graph_tool.
+        conda install --channel conda-forge graph-tool
+        pip install --editable .
     - name: Lint with flake8
       run: |
         conda install flake8

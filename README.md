@@ -6,6 +6,10 @@
 
 "Surf" the biological network, from genome to transcriptome to proteome and back to gain insights into human disease biology.
 
+> This is a fork ([MayankMurali/biosurfer](https://github.com/MayankMurali/biosurfer))
+> undergoing internal modernization with no change to the CLI, database schema, or
+> install workflow below. See [`CHANGELOG.md`](CHANGELOG.md) for what's changed and why.
+
 **Contents**
 
 - [Installation](#installation)

@@ -1,5 +1,5 @@
 
-from setuptools import setup
+from setuptools import setup, find_packages
 
 with open("README.md", 'r') as f:
     long_description = f.read()
@@ -23,8 +23,7 @@ setup(
     keywords = ['biology', 'proteomics', 'alternate splicing'],
     zip_safe = False,
     include_package_data = True,
-    packages =
-        ['biosurfer'],
+    packages = find_packages(),
     python_requires = '>=3.9',
     install_requires =[
         'attrs',
@@ -41,6 +40,10 @@ setup(
         'ipython',
         'pandas',
         'xlsxwriter',
+        'openpyxl',
+        'plotly',
+        'ipykernel',
+        'seaborn',
         ],
     entry_points = {
         'console_scripts':[

@@ -208,8 +208,8 @@ def read_gtf_line(line: str) -> list:
 
 def get_ids_from_gencode_fasta(header: str):
     fields = [field for field in header.split('|') if field and not field.startswith(('UTR', 'CDS'))]
-    transcript_id = next((field for field in fields if field.startswith('ENST')))
-    protein_id = next((field for field in fields if field.startswith('ENSP')), None)
+    transcript_id = next((field for field in fields if field.startswith(('ENST', 'ENSMUST'))), None)
+    protein_id = next((field for field in fields if field.startswith(('ENSP', 'ENSMUSP'))), None)
     return FastaHeaderFields(transcript_id, protein_id)
 
 def get_ids_from_pacbio_fasta(header: str):

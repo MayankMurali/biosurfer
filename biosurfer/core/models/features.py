@@ -1,37 +1,18 @@
-import json
 from functools import cached_property
 from typing import TYPE_CHECKING, List
 
 from biosurfer.core.constants import FeatureType
 from biosurfer.core.constants import \
     CodonAlignmentCategory as TranscriptAlignCat
-from biosurfer.core.helpers import run_length_decode
 from biosurfer.core.models.base import AccessionMixin, Base, NameMixin, TablenameMixin
 from sqlalchemy.ext.hybrid import hybrid_property
 from sqlalchemy.orm import relationship
-from sqlalchemy.sql.schema import Column, ForeignKey, Table, UniqueConstraint
-from sqlalchemy.sql.sqltypes import Boolean, Enum, Integer, PickleType, String
+from sqlalchemy.sql.schema import Column, ForeignKey, UniqueConstraint
+from sqlalchemy.sql.sqltypes import Boolean, Enum, Integer, String
 
 if TYPE_CHECKING:
     from biosurfer.core.alignments import FeatureAlignment
     from biosurfer.core.models.biomolecules import Residue
-
-# feature_base_table = Table(
-#     'proteinfeature', Base.metadata,
-#     Column('type', Enum(FeatureType)),
-#     Column('accession', String, primary_key=True, index=True),
-#     Column('name', String),
-#     Column('description', String)
-# )
-
-
-# feature_mapping_table = Table(
-#     'proteinfeature_mapping', Base.metadata,
-#     Column('feature_id', String, ForeignKey('proteinfeature.accession'), primary_key=True),
-#     Column('protein_id', String, ForeignKey('protein.accession'), primary_key=True),
-#     Column('protein_start', Integer, primary_key=True),
-#     Column('protein_stop', Integer, primary_key=True),
-# )
 
 
 class Feature(Base, TablenameMixin, NameMixin, AccessionMixin):
@@ -125,18 +106,6 @@ class ProjectedFeature(ProteinFeature, TablenameMixin):
                 alt_res.extend(self.residues[i:i+length])
             i += length
         return alt_res
-
-    # def __init__(self, feature_alignment: 'FeatureAlignment'):
-    #     self.alignment = feature_alignment
-    #     self.anchor = feature_alignment.proteinfeature
-    #     self.feature = feature_alignment.proteinfeature.feature
-    #     self.protein = feature_alignment.other
-        
-    #     residues = feature_alignment.other_residues
-    #     self.protein_start = residues[0].position
-    #     self.protein_stop = residues[-1].position
-
-    #     self.altered_residues = [res_aln.other for res_aln in feature_alignment if res_aln.category not in {TranscriptAlignCat.MATCH, TranscriptAlignCat.EDGE_MATCH, TranscriptAlignCat.DELETION}]
 
     def __repr__(self):
         return super().__repr__() + '*'

@@ -124,35 +124,3 @@ def analyze_nterm_risk_cmd(verbose, db_name, gene, vcf, gwas, trait, output):
 
     # Pass the output directory to the analyzer
     analyze_nterm_risk(db.get_session(), gene_name=gene, output_dir=output)
-
-
-@cli.command("analyze_nterm")
-@click.option('-v', '--verbose', is_flag=True, help="Print verbose messages")
-@click.option('-d', '--db_name', required=True, nargs=1, help='Database name')
-@click.option('--gene', required=True, help='Target gene to analyze (e.g., PPARG)')
-@click.option('--vcf', required=True, help="Path to VCF file (bgzipped & tabix indexed)")
-@click.option('--gwas', required=True, help="Path to GWAS summary statistics (TSV)")
-@click.option('--trait', default='GWAS', help="Trait label to record for the loaded GWAS summary statistics (e.g. T2D)")
-@click.option('-o', '--output', type=click.Path(file_okay=False, writable=True, path_type=Path), help='Directory for output tables')
-def analyze_nterm_risk_cmd(verbose, db_name, gene, vcf, gwas, trait, output):
-    """
-    Analyzes N-terminal differences for a specific gene to identify
-    GWAS hits located in unique N-terminal regions (e.g. PPARG1 vs PPARG2).
-    """
-    if verbose:
-        click.echo(f"Initializing database: {db_name}...")
-
-    db = Database(db_name)
-
-    # 1. Load Genetics Data into DB
-    if verbose:
-        click.echo(f"Loading genetics data for {gene}...")
-
-    db.load_genetics_data(vcf_path=vcf, gwas_path=gwas, gene_name=gene, trait=trait)
-    
-    # 2. Run Analysis
-    if verbose:
-        click.echo(f"Running N-terminal risk analysis...")
-
-    # Pass the output directory to the analyzer
-    analyze_nterm_risk(db.get_session(), gene_name=gene, output_dir=output)

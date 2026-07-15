@@ -9,7 +9,7 @@ from dataclasses import dataclass, field, fields
 from enum import Enum
 from itertools import chain, count
 from operator import itemgetter
-from typing import TYPE_CHECKING, Callable, Generic, Iterable, Iterator, List, Optional, TextIO, Tuple, TypeVar
+from typing import TYPE_CHECKING, Callable, Generic, Iterable, Iterator, Optional, TextIO, Tuple, TypeVar
 
 from graph_tool import Graph
 from intervaltree import Interval, IntervalTree
@@ -160,20 +160,6 @@ def count_lines(file_handle: 'TextIOBase', only: Optional[Callable[..., bool]] =
     file_handle.seek(0)
     return lines
 
-
-# def bulk_upsert(session, table, records, primary_keys=('accession',)):
-#     if records:
-#         fields = [field for field in records[0] if field not in primary_keys]
-#         with session.begin():
-#             stmt = insert(table)
-#             session.execute(
-#                 stmt.on_conflict_do_update(
-#                     index_elements = primary_keys,
-#                     set_ = {field: stmt.excluded[field] for field in fields}
-#                 ),
-#                 records
-#             )
-#         records[:] = []
 
 def bulk_upsert(session, table, records, primary_keys=('accession',)):
     if records:

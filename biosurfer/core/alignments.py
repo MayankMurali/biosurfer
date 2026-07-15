@@ -1,19 +1,18 @@
 from abc import ABC, abstractmethod
 from collections import deque
-from functools import cached_property, lru_cache
-from itertools import chain, groupby, tee
+from functools import lru_cache
+from itertools import chain, groupby
 from operator import attrgetter, itemgetter
 from typing import TYPE_CHECKING
-import os
 from attrs import define, evolve, field, frozen
 from biosurfer.core.constants import ANCHOR_EXCLUSIVE, FRAMESHIFT, CD_DEL_INS, OTHER_EXCLUSIVE, SEQ_DEL_INS, SPLIT_CODON, CodonAlignmentCategory as CodonAlignCat
 from biosurfer.core.constants import SequenceAlignmentCategory as SeqAlignCat
 from biosurfer.core.helpers import Interval, IntervalTree
 from biosurfer.core.models.biomolecules import Protein, Transcript
 from biosurfer.core.models.features import ProjectedFeature, ProteinFeature
-from biosurfer.core.splice_events import (BasicTranscriptEvent, TranscriptEvent,
+from biosurfer.core.splice_events import (BasicTranscriptEvent,
                                           call_transcript_events, sort_events)
-from more_itertools import first, last, one, only, partition, windowed
+from more_itertools import last, one, only, partition, windowed
 
 if TYPE_CHECKING:
     from biosurfer.core.constants import AlignmentCategory

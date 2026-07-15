@@ -21,7 +21,7 @@
 
 #### Building Requirements
 
-* Python 3.9 or higher 
+* Python 3.10 or higher 
 * Python packages (numpy, more-itertools, intervaltree, biopython, attrs, tqdm, pandas, pysam)
 * Database (sqlalchemy >=1.4)
 * Vizualization (matplotlib, brokenaxes)

@@ -4,6 +4,28 @@ All notable changes to this fork are logged here. Format loosely follows
 [Keep a Changelog](https://keepachangelog.com/). See `CLAUDE.md` in the parent
 `biosurfer_analysis` folder for the full working log behind these entries.
 
+## [Unreleased]
+
+### Added — Stage B: first new analysis module
+- `biosurfer/analysis/nmd/` — nonsense-mediated decay (NMD) prediction, surfacing the
+  pre-existing `ORF.nmd` 50-nt-rule property (was implemented but never called from
+  anywhere in the codebase). Three additive capabilities, zero edits to `core/`:
+  - `predict.py`: `get_nmd_status` (per-transcript), `compare_isoform_nmd`
+    (anchor-vs-alternative NMD delta), `predict_variant_nmd_effect` (SNP-triggered NMD
+    status flip; indels explicitly rejected, not silently mishandled).
+  - `report.py`: gene-level TSV reports for all three modes, mirroring
+    `genetics_analyzer.py`'s structure. The variant mode reads a VCF directly via
+    `pysam` with no database writes.
+  - New CLI subcommand `biosurfer analyze_nmd -d <db> --gene <gene> --mode
+    {transcript,isoform,variant} [--vcf <path>] -o <output_dir>`, added via
+    `cli.add_command` exactly like `illustrate` -- no existing command changed.
+  - `tests/test_nmd.py` -- 9 tests against hand-built Transcript/ORF/Exon fixtures.
+  - **Verification status**: `pytest tests/test_nmd.py -q` (9 passed);
+    `pytest tests -q` (164 passed, 0 failed); `golden_master/compare_to_baseline.sh`
+    (CLEAN -- only the two known-noise diffs, confirming this module touched nothing
+    existing); `biosurfer analyze_nmd --help` and both transcript/isoform modes run
+    against the toy GENCODE dataset (`--gene CRYBG2`), producing real output TSVs.
+
 ## [v0.2.0] - 2026-07-15
 
 ### Changed — Stage A modernization (no observable behavior change)

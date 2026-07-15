@@ -30,7 +30,7 @@ setup(
         'attrs',
         'biopython',
         'brokenaxes',
-        'intervaltree @ git+https://github.com/chaimleib/intervaltree.git',
+        'intervaltree >= 3.2.1',
         'matplotlib',
         'more-itertools',
         'numpy',

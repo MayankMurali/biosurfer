@@ -3,7 +3,7 @@ from typing import Dict, List, Tuple
 
 import pytest
 from biosurfer.core.helpers import BisectDict, run_length_decode, run_length_encode
-from biosurfer.plots.plotting import generate_subtracks
+from biosurfer.core.algorithms import generate_subtracks
 from hypothesis import given
 from hypothesis.strategies import characters, data, integers, lists, dictionaries, sampled_from, text
 from more_itertools import chunked

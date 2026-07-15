@@ -3,6 +3,7 @@ from operator import itemgetter
 from typing import Iterable, Optional, Tuple
 
 from graph_tool import Graph
+from graph_tool.topology import sequential_vertex_coloring
 
 
 def run_length_encode(text: str) -> str:
@@ -56,3 +57,15 @@ def get_interval_overlap_graph(intervals: Iterable[Tuple[int, int]], labels: Opt
         else:
             active_labels.discard(label)
     return g, label_to_vertex
+
+
+def generate_subtracks(intervals: Iterable[Tuple[int, int]], labels: Iterable):
+    # inspired by https://stackoverflow.com/a/19088519
+    # build graph of labels where labels are adjacent if their intervals overlap
+    g, vertex_labels = get_interval_overlap_graph(intervals, labels)
+    # find vertex coloring of graph
+    # all labels w/ same color can be put into same subtrack
+    coloring = sequential_vertex_coloring(g)
+    label_to_subtrack = dict(zip(vertex_labels, coloring))
+    subtracks = max(label_to_subtrack.values(), default=0) + 1
+    return label_to_subtrack, subtracks

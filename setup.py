@@ -16,7 +16,7 @@ setup(
     long_description_content_type="text/markdown",
     classifiers = [
         "Programming Language :: Python :: 3",
-        "Programming Language :: Python :: 3.9",
+        "Programming Language :: Python :: 3.10",
         "Intended Audience :: Science/Research",
         "Operating System :: OS Independent",
     ],
@@ -25,7 +25,7 @@ setup(
     include_package_data = True,
     packages =
         ['biosurfer'],
-    python_requires = '>=3.9',
+    python_requires = '>=3.10',
     install_requires =[
         'attrs',
         'biopython',

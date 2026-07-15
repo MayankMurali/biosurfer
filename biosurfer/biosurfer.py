@@ -1,23 +1,16 @@
 import csv
-from operator import attrgetter
 from pathlib import Path
 
 import click
-from more_itertools import partition
 
 from biosurfer.analysis.genome_wide_alignment_analysis import run_hybrid_alignment_for_all_genes
-from biosurfer.core.alignments import ProteinAlignment
-from biosurfer.core.constants import APPRIS
 from biosurfer.core.database import Database
 from biosurfer.core.helpers import (get_ids_from_gencode_fasta,
                                     get_ids_from_lrp_fasta,
                                     get_ids_from_pacbio_fasta, skip_gencode,
                                     skip_par_y)
-from biosurfer.core.models.biomolecules import Gene, Transcript
-from biosurfer.plots.plotting import IsoformPlot
 from biosurfer.analysis.plot_biosurfer import run_plot
 
-from biosurfer.core.database import Database
 from biosurfer.analysis.genetics_analyzer import analyze_nterm_risk
 
 @click.group(chain=True)

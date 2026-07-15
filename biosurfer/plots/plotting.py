@@ -1,23 +1,21 @@
 # functions to create different visualizations of isoforms/clones/domains/muts
 from copy import copy
 from dataclasses import dataclass
-from itertools import chain, groupby, islice, tee
-from operator import attrgetter, sub
-from typing import (TYPE_CHECKING, Any, Callable, Collection, Dict, Iterable,
-                    List, Literal, Optional, Set, Tuple, Union)
+from itertools import chain, groupby, tee
+from operator import attrgetter
+from typing import (TYPE_CHECKING, Any, Callable, Dict, Iterable,
+                    List, Optional, Tuple, Union)
 from warnings import filterwarnings, warn
 
 import matplotlib.lines as mlines
 import matplotlib.patches as mpatches
 import matplotlib.pyplot as plt
-import numpy as np
 import seaborn as sns
-from Bio import Align
 from biosurfer.core.alignments import CodonAlignment, ProjectedFeature
 from biosurfer.core.constants import (FRAMESHIFT, SPLIT_CODON, AminoAcid,
                                       CodonAlignmentCategory, FeatureType,
                                       SequenceAlignmentCategory, Strand)
-from biosurfer.core.helpers import (ExceptionLogger, Interval, IntervalTree,
+from biosurfer.core.helpers import (ExceptionLogger, IntervalTree,
                                     get_interval_overlap_graph)
 from biosurfer.core.models.biomolecules import (GencodeTranscript,
                                                 PacBioTranscript, Transcript)
@@ -25,7 +23,6 @@ from biosurfer.core.splice_events import (AcceptorSpliceEvent,
                                           DonorSpliceEvent, ExonBypassEvent,
                                           ExonSpliceEvent, IntronSpliceEvent)
 from brokenaxes import BrokenAxes
-from graph_tool import Graph
 from graph_tool.topology import sequential_vertex_coloring
 from matplotlib._api.deprecation import MatplotlibDeprecationWarning
 from more_itertools import first, last, only
@@ -352,18 +349,8 @@ class IsoformPlot:
         for exon in tx.exons:
             # label every 5th exon in anchor isoform for easier navigation
             if track == 0 and exon.position % 5 == 0:
-                self.draw_text((exon.start + exon.stop)//2, track - self.opts.max_track_width, f'E{exon.position}', ha='center', va='baseline')            
-                        
-            # add subtle splice (delta) amounts, if option turned on
-            # first, make sure the exon contains a (coding) cds object
-            # if exon.cds:
-            #     # TODO: pull subtle splice detection code out into this method?
-            #     delta_start, delta_end = retrieve_subtle_splice_amounts(exon.cds)
-            #     if delta_start:
-            #         self.draw_text(exon.start, track-0.1, delta_start, va='bottom', ha=align_start, size='x-small')
-            #     if delta_end:
-            #         self.draw_text(exon.stop, track-0.1, delta_end, va='bottom', ha=align_stop, size='x-small')
-        
+                self.draw_text((exon.start + exon.stop)//2, track - self.opts.max_track_width, f'E{exon.position}', ha='center', va='baseline')
+
         for orf in tx.orfs:
             first_res = orf.protein.residues[0]
             last_res = orf.protein.residues[-1]
@@ -392,9 +379,6 @@ class IsoformPlot:
         self._handles['Stop codon'] = mlines.Line2D([], [], linestyle='None', color='red', marker='|', markersize=10, markeredgewidth=1)
 
 
-        # process orfs to get ready for plotting
-        # find_and_set_subtle_splicing_status(self.transcripts, self.opts.subtle_splicing_threshold)
-        
         for i, tx in enumerate(self.transcripts):
             with ExceptionLogger(f'Error plotting {tx}'):
                 if tx:
